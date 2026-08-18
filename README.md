@@ -1,56 +1,68 @@
-# Welcome to your Expo app 👋
+下方Tab1(今日): 點選進入首頁, 在此頁點 Tab 會將選取的日期框重置回今天的日期。
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+今日頁面內功能：1.全屏顯示行事曆，瀏覽狀態時，右下角有一個懸浮icon(排班)，點擊後進入排班狀態
 
-## Get started
+2.進入排班狀態時，上方是行事曆，下方是一個常駐不可關閉的半截 bottom sheet，裡面會顯示【班別(列出所有班別)】、【手動輸入】、【新增班別】、【休息日/無/空白】。預設highlight 當月 1 號，可手動選擇日期(highlight)。選指定班別，可將此排班新增到當前選定的日期上，並自動跳到下一個日期。點擊退出按鈕可回到瀏覽狀態。
 
-1. Install dependencies
+3.瀏覽狀態下，點擊日期，下方出現一個半截 bottom sheet，顯示所有排班，其中sheet內有一個返回按鈕跟刪除按鈕，點擊返回關閉sheet；點擊刪除按鈕，這個日期下的排班都會出現一個刪除的按鈕
 
-   ```bash
-   npm install
-   ```
+4.接續(3)，點擊單一排班選項，會跳出一個半截 bottom sheet，可進行單一排班的內容編輯，以及有一個刪除此事項的按鈕。
 
-2. Start the app
+新增:半截 bottom sheet,預設當月 1 號、可切換日期 → 點班別清單直接建立當天班次;或「手動輸入」建立臨時單次班次(選工作地點+起訖時間,只算基本時薪,不記錄成班別範本)
 
-   ```bash
-   npx expo start
-   ```
+下方Tab2(統計)
 
-In the output, you'll find options to open the app in a
+1.時間範圍篩選:週/雙週/月/年/自訂(自訂再跳日期範圍選擇),預設一個月
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+2.工作範圍篩選:可多選(不是只能選一個),「全部工作」只是全選的特例,邏輯共用不用另外處理
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+3.接續(1)(2),上方顯示出勤概況卡片:出勤率(百分比 = 已出勤天數 ÷ 已過天數)、已排定(未來)天數、最長連續上班天數警示——這個警示天數不受工作篩選影響,是把選中(或全部)工作的排班日期合併起來算的,不是每份工作分開算
 
-## Get a fresh project
+4.總工時、總收入都拆成「已完成」跟「預估(未發生)」兩行:以今天為界,日期 ≤ 今天算已完成,> 今天算預估;只有選的時間範圍有延伸到未來時才會出現預估區塊(查過去的月份不會有);月薪工作不參與這個拆分,月薪金額固定算在已完成那一行,因為月薪本身不會因為還沒到月底就變得不確定
 
-When you're ready, run:
+5.依工作拆算列表:每一列整列可以點,點進去查看這份工作在目前時間範圍內的逐日明細(不用另外找按鈕)
 
-```bash
-npm run reset-project
-```
+6.接續(5),逐日明細頁:
+上方摘要:這份工作自己的出勤/工時/收入,一樣分「已完成」跟「預估」
+逐日列表:日期 + 班別 + 時段 + 時數 + 當日薪資
+還沒發生的班次(預估)用虛線外框 + 時鐘圖示 + 金額變淡色標示,跟已完成的分開
+手動調整過金額的班次多一個鉛筆圖示 + 一行小字提示「此金額為手動調整,非系統自動計算」
+有加給(深夜/假日)的班次那一列可以點,點下去展開看金額怎麼拆解算出來的(例如一般時段多少 + 深夜加給多少)
+底部有筆數截斷提示(例如「本月共 12 筆,顯示前 6 筆」),避免一份工作班次排太多把畫面撐爆
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+以下先記錄、還沒定案,之後再討論:
+- 依發薪週期拆算(週結/雙週結/月結/日結,分段顯示已領/未領多少)——還沒決定要不要做,或做成逐日明細的另一種分組方式(平常按日期排,切換後改成按發薪週期分組)
+- 跨期比較/趨勢(跟上一期比較差異、看近幾期走勢)
+- 依日期跨工作彙總視角(點某一天,看那天在哪幾份工作都有排班、合計多少,可能可以重用 Tab1 日期清單的邏輯)
+- 班別層級再篩選(選了工作範圍之後,再往下篩這份工作裡的哪個班別)
+- 匯出功能(要先問清楚是要拿去記帳、報稅、還是備份,不同用途格式不一樣,先不做)
+- 歷史金額可能因為薪率事後調整被回溯改變,目前完全沒有提示——傾向的方向是「建立/編輯班次的當下就把算出來的金額凍結存進那筆紀錄」,不要每次都用「現在」的薪率設定重算「過去」的班次,但這個改動會動到計薪引擎的核心假設,影響範圍大,還沒拍板要不要做
 
-### Other setup steps
+下方Tab3(設定)
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+1.工作設定選項點擊後導向工作主頁
 
-## Learn more
+2.接續(1)，上方有一個可切換tab的bar，列出兩個選項:工作/排班。
 
-To learn more about developing your project with Expo, look at the following resources:
+3.接續(2)，點擊工作，列出所有的工作，點擊選項可進入編輯頁，下方有一個新增工作選項
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+4.接續(3)，點擊進入工作編輯，會有以下的欄位
 
-## Join the community
+工作地點:名稱
+計薪方式:月薪 / 非月薪(新增時選定，建立後不可再改，因為過去排班紀錄都是即時用目前設定回算金額，換算法會讓歷史紀錄失真)
 
-Join our community of developers creating universal apps.
+以下為「月薪」才有的欄位
+薪水:月薪 XX 元
+起始日 / 目前是否仍在職 / 結束日(若目前是否仍合作=否，建議填)
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+「非月薪」的工作地點，薪水欄位不在這裡填，改到「排班」分頁裡逐班別填(因為同一個工作地點下，不同班別可能薪率不同，例如家教同補習班不同科目鐘點費不同)
+
+5.接續(2)，點擊排班，依工作為綁定基準作為一個區塊，每個區塊列出所屬的所有班別簡述(名稱、起訖時間)，每個區塊下方有一個新增班別選項6.接續(5)，點進班別可以編輯詳細內容，會有以下欄位
+
+綁定「月薪」工作地點的班別:起訖時間必填(用來算出勤工時給薪資頁顯示，本身不計逐班金額)
+綁定「非月薪」工作地點的班別，多一個「全日」開關:
+
+- 全日關閉:起訖時間必填、時薪必填，休息時間/深夜加給/假日加給可選填
+- 全日開啟:不顯示起訖時間，改填「日薪金額」必填，不管做多久都算這個固定數字，休息時間/深夜加給/假日加給都不適用(因為沒有起訖時間可以算)
+
+(EX. 工地師傅日薪 1600、時數不定 → 全日班別；超商工讀時薪制、有明確上下班時間 → 非全日班別；正職辦公室固定月薪 → 月薪工作地點，班別只用來記出勤工時)
