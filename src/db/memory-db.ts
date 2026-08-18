@@ -14,7 +14,11 @@ import * as schema from './schema';
 
 type ColumnInfo = { jsName: string; sqlName: string; isBoolean: boolean };
 
-const TABLES = { wage_rules: schema.wageRules, shifts: schema.shifts } as const;
+const TABLES = {
+  workplaces: schema.workplaces,
+  shift_types: schema.shiftTypes,
+  shifts: schema.shifts,
+} as const;
 
 function columnInfoFor(table: object): ColumnInfo[] {
   const columns = getTableColumns(table as any);
@@ -51,20 +55,28 @@ export function createMemoryDb() {
   return drizzle(async (sql, params) => {
     const text = sql.trim();
 
-    const insertMatch = text.match(/^insert into "([^"]+)"\s*\(([^)]*)\)/i);
+    const insertMatch = text.match(/^insert into "([^"]+)"\s*\(([^)]*)\)\s*values\s*\(([^)]*)\)/i);
     if (insertMatch) {
-      const [, tableName, columnList] = insertMatch;
+      const [, tableName, columnList, valuesList] = insertMatch;
       const columns = columnsByTable.get(tableName) ?? [];
       const byName = new Map(columns.map((c) => [c.sqlName, c]));
       const sqlNames = quotedIdentifiers(columnList);
+      // 有 autoincrement 的 id 欄位,drizzle 產生的 VALUES 會直接寫字面 `null`,不是 `?` 綁定參數,
+      // 這裡要照 value token 是不是 `?` 來決定要不要消耗一個 params,不能假設欄位跟 params 一一對應
+      const valueTokens = valuesList.split(',').map((t) => t.trim());
 
       const id = nextIdByTable.get(tableName) ?? 1;
       nextIdByTable.set(tableName, id + 1);
 
       const row: Record<string, unknown> = { id };
+      let paramIndex = 0;
       sqlNames.forEach((sqlName, i) => {
         const col = byName.get(sqlName);
-        if (col) row[col.jsName] = toJsValue(params[i], col.isBoolean);
+        const isBoundParam = valueTokens[i] === '?';
+        if (col && isBoundParam) {
+          row[col.jsName] = toJsValue(params[paramIndex], col.isBoolean);
+        }
+        if (isBoundParam) paramIndex += 1;
       });
       rowsByTable.get(tableName)?.push(row);
       return { rows: [] };

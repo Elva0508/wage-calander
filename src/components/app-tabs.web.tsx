@@ -14,15 +14,17 @@ import { ThemedView } from './themed-view';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useUiStore } from '@/store/ui-store';
 
 const TABS = [
-  { name: 'index', href: '/', label: '月曆', icon: 'calendar-outline' },
-  { name: 'add-shift', href: '/add-shift', label: '新增', icon: 'add-circle-outline' },
+  { name: 'index', href: '/', label: '今日', icon: 'calendar-outline' },
   { name: 'wage', href: '/wage', label: '薪資', icon: 'cash-outline' },
   { name: 'settings', href: '/settings', label: '設定', icon: 'settings-outline' },
 ] as const;
 
 export default function AppTabs() {
+  const resetToday = useUiStore((s) => s.resetToday);
+
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
@@ -30,7 +32,9 @@ export default function AppTabs() {
         <CustomTabList>
           {TABS.map((tab) => (
             <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
-              <TabButton icon={tab.icon}>{tab.label}</TabButton>
+              <TabButton icon={tab.icon} onExtraPress={tab.name === 'index' ? resetToday : undefined}>
+                {tab.label}
+              </TabButton>
             </TabTrigger>
           ))}
         </CustomTabList>
@@ -43,12 +47,20 @@ export function TabButton({
   children,
   isFocused,
   icon,
+  onExtraPress,
+  onPress,
   ...props
-}: TabTriggerSlotProps & { icon: keyof typeof Ionicons.glyphMap }) {
+}: TabTriggerSlotProps & { icon: keyof typeof Ionicons.glyphMap; onExtraPress?: () => void }) {
   const theme = useTheme();
 
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
+    <Pressable
+      {...props}
+      onPress={(e) => {
+        onExtraPress?.();
+        onPress?.(e);
+      }}
+      style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView
         type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
         style={styles.tabButtonView}>

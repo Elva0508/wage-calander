@@ -10,97 +10,33 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, CardRadius, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { WageRule } from '@/db/schema';
+import { ShiftType, Workplace } from '@/db/schema';
 import { useDataStore } from '@/store/data-store';
 
-const ruleFormSchema = z.object({
-  jobName: z.string().trim().min(1, '請輸入工作名稱'),
-  baseRate: z.coerce.number().positive('基本時薪需大於 0'),
-  nightRateEnabled: z.boolean(),
-  nightMultiplier: z.coerce.number().positive().optional(),
-  nightStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, '格式需為 HH:mm').optional(),
-  nightEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, '格式需為 HH:mm').optional(),
-  holidayRateEnabled: z.boolean(),
-  holidayPercent: z.coerce.number().positive().optional(),
-});
+const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-type RuleFormValues = z.infer<typeof ruleFormSchema>;
-
-const emptyValues: RuleFormValues = {
-  jobName: '',
-  baseRate: 0,
-  nightRateEnabled: false,
-  nightMultiplier: 1.34,
-  nightStart: '22:00',
-  nightEnd: '06:00',
-  holidayRateEnabled: false,
-  holidayPercent: 33,
+const WAGE_TYPE_LABELS: Record<'monthly' | 'daily' | 'hourly', string> = {
+  monthly: '月薪',
+  daily: '日薪',
+  hourly: '時薪',
 };
 
 export default function SettingsScreen() {
-  const theme = useTheme();
-  const wageRules = useDataStore((state) => state.wageRules);
-  const addWageRule = useDataStore((state) => state.addWageRule);
-  const updateWageRule = useDataStore((state) => state.updateWageRule);
-  const [editingId, setEditingId] = useState<number | 'new' | null>(null);
+  const [view, setView] = useState<'root' | 'hub'>('root');
 
-  const editingRule = useMemo(
-    () => (typeof editingId === 'number' ? wageRules.find((r) => r.id === editingId) : undefined),
-    [editingId, wageRules],
-  );
-
-  if (editingId !== null) {
-    return (
-      <RuleForm
-        key={editingId}
-        initial={editingRule}
-        onCancel={() => setEditingId(null)}
-        onSubmit={async (values) => {
-          if (typeof editingId === 'number') {
-            await updateWageRule(editingId, values);
-          } else {
-            await addWageRule(values);
-          }
-          setEditingId(null);
-        }}
-      />
-    );
+  if (view === 'hub') {
+    return <WorkplaceHub onBack={() => setView('root')} />;
   }
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
-          <ThemedText type="subtitle">薪資規則設定</ThemedText>
-
-          {wageRules.length === 0 ? (
-            <ThemedText themeColor="textSecondary">
-              還沒有任何工作,點下方「新增工作」開始設定時薪。
-            </ThemedText>
-          ) : (
-            wageRules.map((rule) => (
-              <Pressable key={rule.id} onPress={() => setEditingId(rule.id)}>
-                <ThemedView type="backgroundElement" style={styles.ruleCard}>
-                  <ThemedView type="backgroundElement" style={styles.ruleCardHeader}>
-                    <ThemedText type="smallBold">{rule.jobName}</ThemedText>
-                    <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-                  </ThemedView>
-                  <ThemedText themeColor="textSecondary">基本時薪 ${rule.baseRate}</ThemedText>
-                  <ThemedView type="backgroundElement" style={styles.badgeRow}>
-                    {rule.nightRateEnabled && <Badge label="深夜加給" color={theme.primary} />}
-                    {rule.holidayRateEnabled && <Badge label="假日加給" color={theme.accent} />}
-                  </ThemedView>
-                </ThemedView>
-              </Pressable>
-            ))
-          )}
-
-          <Pressable onPress={() => setEditingId('new')}>
-            <ThemedView style={[styles.addButton, { borderColor: theme.primary }]}>
-              <Ionicons name="add" size={18} color={theme.primary} />
-              <ThemedText style={{ color: theme.primary }}>新增工作</ThemedText>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ThemedText type="subtitle">設定</ThemedText>
+          <Pressable onPress={() => setView('hub')}>
+            <ThemedView type="backgroundElement" style={styles.rootMenuCard}>
+              <ThemedText type="smallBold">工作設定</ThemedText>
+              <Ionicons name="chevron-forward" size={18} color="#60646C" />
             </ThemedView>
           </Pressable>
         </ScrollView>
@@ -109,24 +45,166 @@ export default function SettingsScreen() {
   );
 }
 
-function Badge({ label, color }: { label: string; color: string }) {
+// ---------------------------------------------------------------------------
+// 工作主頁(上方 pill 子分頁:工作 / 排班)
+// ---------------------------------------------------------------------------
+
+function WorkplaceHub({ onBack }: { onBack: () => void }) {
+  const theme = useTheme();
+  const [activeTab, setActiveTab] = useState<'workplace' | 'shiftType'>('workplace');
+
   return (
-    <ThemedView style={[styles.badge, { backgroundColor: color }]}>
-      <ThemedText type="small" style={styles.badgeText}>
-        {label}
-      </ThemedText>
+    <ThemedView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={styles.hubHeader}>
+          <Pressable onPress={onBack} hitSlop={12} style={styles.backPressable}>
+            <ThemedView style={styles.backRow}>
+              <Ionicons name="chevron-back" size={22} color={theme.primary} />
+              <ThemedText style={{ color: theme.primary }}>設定</ThemedText>
+            </ThemedView>
+          </Pressable>
+          <ThemedText type="smallBold">工作設定</ThemedText>
+          <ThemedView style={styles.headerSpacer} />
+        </ThemedView>
+
+        <ThemedView style={styles.subTabRow}>
+          <SubTabButton label="工作" active={activeTab === 'workplace'} onPress={() => setActiveTab('workplace')} />
+          <SubTabButton label="排班" active={activeTab === 'shiftType'} onPress={() => setActiveTab('shiftType')} />
+        </ThemedView>
+
+        {activeTab === 'workplace' ? <WorkplaceSettings /> : <ShiftTypeSettings />}
+      </SafeAreaView>
     </ThemedView>
   );
 }
 
-function RuleForm({
+function SubTabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable onPress={onPress} style={styles.subTabButtonPressable}>
+      <ThemedView type={active ? 'backgroundSelected' : 'backgroundElement'} style={styles.subTabButton}>
+        <ThemedText themeColor={active ? 'text' : 'textSecondary'} style={active ? { color: theme.primary } : undefined}>
+          {label}
+        </ThemedText>
+      </ThemedView>
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 工作(子分頁)
+// ---------------------------------------------------------------------------
+
+const workplaceFormSchema = z
+  .object({
+    name: z.string().trim().min(1, '請輸入工作地點名稱'),
+    wageType: z.enum(['monthly', 'daily', 'hourly']),
+    monthlySalary: z.coerce.number().positive().optional(),
+    onboardDate: z.string().optional(),
+    isCurrentlyEmployed: z.boolean().optional(),
+    endDate: z.string().optional(),
+    defaultHourlyRate: z.coerce.number().positive().optional(),
+    defaultDailyRate: z.coerce.number().positive().optional(),
+  })
+  .refine((values) => values.wageType !== 'monthly' || values.monthlySalary != null, {
+    message: '請輸入月薪金額',
+    path: ['monthlySalary'],
+  });
+
+type WorkplaceFormValues = z.infer<typeof workplaceFormSchema>;
+
+function WorkplaceSettings() {
+  const theme = useTheme();
+  const workplaces = useDataStore((state) => state.workplaces);
+  const addWorkplace = useDataStore((state) => state.addWorkplace);
+  const updateWorkplace = useDataStore((state) => state.updateWorkplace);
+  const deleteWorkplace = useDataStore((state) => state.deleteWorkplace);
+  const [editingId, setEditingId] = useState<number | 'new' | null>(null);
+
+  const editing = useMemo(
+    () => (typeof editingId === 'number' ? workplaces.find((w) => w.id === editingId) : undefined),
+    [editingId, workplaces],
+  );
+
+  if (editingId !== null) {
+    return (
+      <WorkplaceForm
+        key={editingId}
+        initial={editing}
+        onCancel={() => setEditingId(null)}
+        onSubmit={async (values) => {
+          if (typeof editingId === 'number') {
+            await updateWorkplace(editingId, values);
+          } else {
+            await addWorkplace(values);
+          }
+          setEditingId(null);
+        }}
+        onDelete={
+          typeof editingId === 'number'
+            ? () => {
+                Alert.alert('刪除工作地點', '確定要刪除這個工作地點嗎?此動作無法復原。', [
+                  { text: '取消', style: 'cancel' },
+                  {
+                    text: '刪除',
+                    style: 'destructive',
+                    onPress: async () => {
+                      await deleteWorkplace(editingId);
+                      setEditingId(null);
+                    },
+                  },
+                ]);
+              }
+            : undefined
+        }
+      />
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {workplaces.length === 0 ? (
+        <ThemedText themeColor="textSecondary">還沒有任何工作地點,點下方「新增工作地點」開始設定。</ThemedText>
+      ) : (
+        workplaces.map((wp) => (
+          <Pressable key={wp.id} onPress={() => setEditingId(wp.id)}>
+            <ThemedView type="backgroundElement" style={styles.card}>
+              <ThemedView type="backgroundElement" style={styles.cardHeader}>
+                <ThemedText type="smallBold">{wp.name}</ThemedText>
+                <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+              </ThemedView>
+              <ThemedText themeColor="textSecondary">
+                {wp.wageType === 'monthly'
+                  ? `月薪 $${wp.monthlySalary?.toLocaleString() ?? '未設定'}`
+                  : wp.wageType === 'daily'
+                    ? `日薪 $${wp.defaultDailyRate?.toLocaleString() ?? '未設定'}`
+                    : `時薪 $${wp.defaultHourlyRate?.toLocaleString() ?? '未設定'}`}
+              </ThemedText>
+            </ThemedView>
+          </Pressable>
+        ))
+      )}
+
+      <Pressable onPress={() => setEditingId('new')}>
+        <ThemedView style={[styles.addButton, { borderColor: theme.primary }]}>
+          <Ionicons name="add" size={18} color={theme.primary} />
+          <ThemedText style={{ color: theme.primary }}>新增工作地點</ThemedText>
+        </ThemedView>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function WorkplaceForm({
   initial,
   onSubmit,
   onCancel,
+  onDelete,
 }: {
-  initial?: WageRule;
-  onSubmit: (values: RuleFormValues) => Promise<void>;
+  initial?: Workplace;
+  onSubmit: (values: WorkplaceFormValues) => Promise<void>;
   onCancel: () => void;
+  onDelete?: () => void;
 }) {
   const theme = useTheme();
   const {
@@ -134,48 +212,101 @@ function RuleForm({
     handleSubmit,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<z.input<typeof ruleFormSchema>, any, RuleFormValues>({
-    resolver: zodResolver(ruleFormSchema),
+  } = useForm<z.input<typeof workplaceFormSchema>, any, WorkplaceFormValues>({
+    resolver: zodResolver(workplaceFormSchema),
     defaultValues: initial
       ? {
-          jobName: initial.jobName,
-          baseRate: initial.baseRate,
-          nightRateEnabled: initial.nightRateEnabled,
-          nightMultiplier: initial.nightMultiplier ?? emptyValues.nightMultiplier,
-          nightStart: initial.nightStart ?? emptyValues.nightStart,
-          nightEnd: initial.nightEnd ?? emptyValues.nightEnd,
-          holidayRateEnabled: initial.holidayRateEnabled,
-          holidayPercent: initial.holidayPercent ?? emptyValues.holidayPercent,
+          name: initial.name,
+          wageType: initial.wageType as 'monthly' | 'daily' | 'hourly',
+          monthlySalary: initial.monthlySalary ?? undefined,
+          onboardDate: initial.onboardDate ?? '',
+          isCurrentlyEmployed: initial.isCurrentlyEmployed ?? true,
+          endDate: initial.endDate ?? '',
+          defaultHourlyRate: initial.defaultHourlyRate ?? undefined,
+          defaultDailyRate: initial.defaultDailyRate ?? undefined,
         }
-      : emptyValues,
+      : { name: '', wageType: 'hourly', isCurrentlyEmployed: true },
   });
 
-  const nightEnabled = watch('nightRateEnabled');
-  const holidayEnabled = watch('holidayRateEnabled');
+  const wageType = watch('wageType');
+  const isCurrentlyEmployed = watch('isCurrentlyEmployed');
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <ThemedView type="backgroundElement" style={styles.formHeader}>
-            <Pressable onPress={onCancel}>
-              <ThemedText style={{ color: theme.primary }}>取消</ThemedText>
-            </Pressable>
-            <ThemedText type="smallBold">{initial ? '編輯工作' : '新增工作'}</ThemedText>
-            <Pressable onPress={handleSubmit(onSubmit)} disabled={isSubmitting}>
-              <ThemedText style={{ color: theme.primary }}>儲存</ThemedText>
-            </Pressable>
-          </ThemedView>
+    <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ThemedView type="backgroundElement" style={styles.formHeader}>
+        <Pressable onPress={onCancel}>
+          <ThemedText style={{ color: theme.primary }}>取消</ThemedText>
+        </Pressable>
+        <ThemedText type="smallBold">{initial ? '編輯工作地點' : '新增工作地點'}</ThemedText>
+        <Pressable onPress={handleSubmit(onSubmit)} disabled={isSubmitting}>
+          <ThemedText style={{ color: theme.primary }}>儲存</ThemedText>
+        </Pressable>
+      </ThemedView>
 
-          <FieldLabel label="工作名稱" error={errors.jobName?.message}>
+      <FieldLabel label="工作地點名稱" error={errors.name?.message}>
+        <Controller
+          control={control}
+          name="name"
+          render={({ field }) => (
+            <TextInput
+              value={field.value}
+              onChangeText={field.onChange}
+              placeholder="例如:早餐店"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+            />
+          )}
+        />
+      </FieldLabel>
+
+      <FieldLabel label="計薪方式">
+        {initial ? (
+          <ThemedView style={styles.lockedField}>
+            <ThemedText themeColor="textSecondary">{WAGE_TYPE_LABELS[wageType]}</ThemedText>
+          </ThemedView>
+        ) : (
+          <Controller
+            control={control}
+            name="wageType"
+            render={({ field }) => (
+              <ThemedView style={styles.segmentedRow}>
+                {(['monthly', 'daily', 'hourly'] as const).map((option) => {
+                  const selected = field.value === option;
+                  return (
+                    <Pressable key={option} onPress={() => field.onChange(option)} style={styles.flex1}>
+                      <ThemedView
+                        style={[
+                          styles.segmentedButton,
+                          { backgroundColor: selected ? theme.primary : theme.backgroundElement },
+                        ]}>
+                        <ThemedText style={{ color: selected ? '#ffffff' : theme.text }}>
+                          {WAGE_TYPE_LABELS[option]}
+                        </ThemedText>
+                      </ThemedView>
+                    </Pressable>
+                  );
+                })}
+              </ThemedView>
+            )}
+          />
+        )}
+        <ThemedText type="small" themeColor="textSecondary">
+          建立後無法變更,避免過去排班紀錄的金額被回溯改變
+        </ThemedText>
+      </FieldLabel>
+
+      {wageType === 'monthly' ? (
+        <>
+          <FieldLabel label="月薪金額" error={errors.monthlySalary?.message}>
             <Controller
               control={control}
-              name="jobName"
+              name="monthlySalary"
               render={({ field }) => (
                 <TextInput
-                  value={field.value}
+                  value={field.value != null ? String(field.value) : ''}
                   onChangeText={field.onChange}
-                  placeholder="例如:早餐店"
+                  keyboardType="numeric"
+                  placeholder="35000"
                   placeholderTextColor={theme.textSecondary}
                   style={[styles.input, { color: theme.text, borderColor: theme.border }]}
                 />
@@ -183,13 +314,64 @@ function RuleForm({
             />
           </FieldLabel>
 
-          <FieldLabel label="基本時薪" error={errors.baseRate?.message}>
+          <FieldLabel label="起始日(選填)">
             <Controller
               control={control}
-              name="baseRate"
+              name="onboardDate"
               render={({ field }) => (
                 <TextInput
-                  value={String(field.value ?? '')}
+                  value={field.value}
+                  onChangeText={field.onChange}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                />
+              )}
+            />
+          </FieldLabel>
+
+          <ThemedView type="backgroundElement" style={styles.switchRow}>
+            <ThemedText>目前是否仍在職</ThemedText>
+            <Controller
+              control={control}
+              name="isCurrentlyEmployed"
+              render={({ field }) => (
+                <Switch value={field.value ?? true} onValueChange={field.onChange} trackColor={{ true: theme.primary }} />
+              )}
+            />
+          </ThemedView>
+
+          {isCurrentlyEmployed === false && (
+            <FieldLabel label="結束日(建議填)">
+              <Controller
+                control={control}
+                name="endDate"
+                render={({ field }) => (
+                  <TextInput
+                    value={field.value}
+                    onChangeText={field.onChange}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={theme.textSecondary}
+                    style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                  />
+                )}
+              />
+            </FieldLabel>
+          )}
+        </>
+      ) : wageType === 'hourly' ? (
+        <>
+          <ThemedText type="small" themeColor="textSecondary">
+            這是預設時薪,同一份工作底下不同班別預設都用這個數字;個別班別時薪不一樣的話,可以在「排班」分頁裡針對那個班別覆蓋。
+          </ThemedText>
+
+          <FieldLabel label="預設時薪(選填)" error={errors.defaultHourlyRate?.message}>
+            <Controller
+              control={control}
+              name="defaultHourlyRate"
+              render={({ field }) => (
+                <TextInput
+                  value={field.value != null ? String(field.value) : ''}
                   onChangeText={field.onChange}
                   keyboardType="numeric"
                   placeholder="183"
@@ -199,17 +381,451 @@ function RuleForm({
               )}
             />
           </FieldLabel>
+        </>
+      ) : (
+        <>
+          <ThemedText type="small" themeColor="textSecondary">
+            這是預設日薪,同一份工作底下不同班別預設都用這個數字,不管實際工作多久;個別班別日薪不一樣的話,可以在「排班」分頁裡針對那個班別覆蓋。
+          </ThemedText>
+
+          <FieldLabel label="預設日薪(選填)" error={errors.defaultDailyRate?.message}>
+            <Controller
+              control={control}
+              name="defaultDailyRate"
+              render={({ field }) => (
+                <TextInput
+                  value={field.value != null ? String(field.value) : ''}
+                  onChangeText={field.onChange}
+                  keyboardType="numeric"
+                  placeholder="1600"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                />
+              )}
+            />
+          </FieldLabel>
+        </>
+      )}
+
+      {onDelete && (
+        <Pressable onPress={onDelete}>
+          <ThemedView style={[styles.deleteButton, { borderColor: theme.danger }]}>
+            <ThemedText style={{ color: theme.danger }}>刪除這個工作地點</ThemedText>
+          </ThemedView>
+        </Pressable>
+      )}
+    </ScrollView>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 排班(子分頁)
+// ---------------------------------------------------------------------------
+
+const shiftTypeFormShape = z.object({
+  name: z.string().trim().min(1, '請輸入班別名稱'),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  useDefaultRate: z.boolean(),
+  hourlyRate: z.coerce.number().positive().optional(),
+  dailyRate: z.coerce.number().positive().optional(),
+  breakMinutes: z.coerce.number().min(0).optional(),
+  breakPaid: z.boolean(),
+  nightRateEnabled: z.boolean(),
+  nightMultiplier: z.coerce.number().positive().optional(),
+  nightStart: z.string().optional(),
+  nightEnd: z.string().optional(),
+  holidayRateEnabled: z.boolean(),
+  holidayPercent: z.coerce.number().positive().optional(),
+});
+
+/**
+ * 起訖時間不管綁定哪種計薪方式都一律必填。薪率要不要求則看計薪方式:
+ * 月薪完全不需要薪率欄位;日薪/時薪則是「有開套用預設薪資」就不用填,沒開才要填自己的覆蓋值。
+ */
+function buildShiftTypeFormSchema(wageType: 'monthly' | 'daily' | 'hourly') {
+  const withTimeRequired = shiftTypeFormShape
+    .refine((v) => v.startTime && timeRegex.test(v.startTime), { message: '格式需為 HH:mm', path: ['startTime'] })
+    .refine((v) => v.endTime && timeRegex.test(v.endTime), { message: '格式需為 HH:mm', path: ['endTime'] });
+
+  if (wageType === 'monthly') return withTimeRequired;
+
+  if (wageType === 'daily') {
+    return withTimeRequired.refine((v) => v.useDefaultRate || v.dailyRate != null, {
+      message: '請輸入日薪金額,或開啟「套用工作預設薪資」',
+      path: ['dailyRate'],
+    });
+  }
+
+  return withTimeRequired.refine((v) => v.useDefaultRate || v.hourlyRate != null, {
+    message: '請輸入時薪,或開啟「套用工作預設薪資」',
+    path: ['hourlyRate'],
+  });
+}
+
+type ShiftTypeFormValues = z.infer<typeof shiftTypeFormShape>;
+
+const emptyShiftTypeValues: ShiftTypeFormValues = {
+  name: '',
+  startTime: '',
+  endTime: '',
+  useDefaultRate: true,
+  breakMinutes: 0,
+  breakPaid: false,
+  nightRateEnabled: false,
+  nightMultiplier: 1.34,
+  nightStart: '22:00',
+  nightEnd: '06:00',
+  holidayRateEnabled: false,
+  holidayPercent: 33,
+};
+
+function ShiftTypeSettings() {
+  const theme = useTheme();
+  const shiftTypes = useDataStore((state) => state.shiftTypes);
+  const workplaces = useDataStore((state) => state.workplaces);
+  const addShiftType = useDataStore((state) => state.addShiftType);
+  const updateShiftType = useDataStore((state) => state.updateShiftType);
+  const deleteShiftType = useDataStore((state) => state.deleteShiftType);
+  const [editing, setEditing] = useState<{ mode: 'new'; workplaceId: number } | { mode: 'edit'; id: number } | null>(
+    null,
+  );
+
+  const shiftTypesByWorkplace = useMemo(() => {
+    const groups = new Map<number, ShiftType[]>();
+    for (const st of shiftTypes) {
+      const list = groups.get(st.workplaceId) ?? [];
+      list.push(st);
+      groups.set(st.workplaceId, list);
+    }
+    return workplaces.map((wp) => ({ workplace: wp, shiftTypes: groups.get(wp.id) ?? [] }));
+  }, [shiftTypes, workplaces]);
+
+  if (workplaces.length === 0) {
+    return (
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ThemedText themeColor="textSecondary">請先到「工作」分頁新增至少一個工作地點,才能新增班別。</ThemedText>
+      </ScrollView>
+    );
+  }
+
+  if (editing) {
+    const workplace = workplaces.find(
+      (wp) => wp.id === (editing.mode === 'new' ? editing.workplaceId : shiftTypes.find((st) => st.id === editing.id)?.workplaceId),
+    );
+    const editingShiftType = editing.mode === 'edit' ? shiftTypes.find((st) => st.id === editing.id) : undefined;
+    if (!workplace) {
+      setEditing(null);
+      return null;
+    }
+    return (
+      <ShiftTypeForm
+        key={editing.mode === 'new' ? `new-${editing.workplaceId}` : editing.id}
+        workplace={workplace}
+        initial={editingShiftType}
+        onCancel={() => setEditing(null)}
+        onSubmit={async (values) => {
+          const isHourly = workplace.wageType === 'hourly';
+          const isDaily = workplace.wageType === 'daily';
+          const payload = {
+            name: values.name,
+            startTime: values.startTime || '',
+            endTime: values.endTime || '',
+            hourlyRate: isHourly && !values.useDefaultRate ? values.hourlyRate ?? null : null,
+            dailyRate: isDaily && !values.useDefaultRate ? values.dailyRate ?? null : null,
+            breakMinutes: isHourly ? values.breakMinutes ?? null : null,
+            breakPaid: isHourly ? values.breakPaid : null,
+            nightRateEnabled: isHourly && values.nightRateEnabled,
+            nightMultiplier: isHourly && values.nightRateEnabled ? values.nightMultiplier ?? null : null,
+            nightStart: isHourly && values.nightRateEnabled ? values.nightStart ?? null : null,
+            nightEnd: isHourly && values.nightRateEnabled ? values.nightEnd ?? null : null,
+            holidayRateEnabled: isHourly && values.holidayRateEnabled,
+            holidayPercent: isHourly && values.holidayRateEnabled ? values.holidayPercent ?? null : null,
+          };
+          if (editing.mode === 'edit') {
+            await updateShiftType(editing.id, payload);
+          } else {
+            await addShiftType({ ...payload, workplaceId: editing.workplaceId });
+          }
+          setEditing(null);
+        }}
+        onDelete={
+          editing.mode === 'edit'
+            ? () => {
+                Alert.alert('刪除班別', '確定要刪除這個班別嗎?此動作無法復原。', [
+                  { text: '取消', style: 'cancel' },
+                  {
+                    text: '刪除',
+                    style: 'destructive',
+                    onPress: async () => {
+                      if (editing.mode === 'edit') await deleteShiftType(editing.id);
+                      setEditing(null);
+                    },
+                  },
+                ]);
+              }
+            : undefined
+        }
+      />
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {shiftTypesByWorkplace.map(({ workplace, shiftTypes: list }) => (
+        <ThemedView key={workplace.id} style={styles.shiftTypeGroup}>
+          <ThemedText type="smallBold">{workplace.name}</ThemedText>
+
+          {list.map((st) => (
+            <Pressable key={st.id} onPress={() => setEditing({ mode: 'edit', id: st.id })}>
+              <ThemedView type="backgroundElement" style={styles.card}>
+                <ThemedView type="backgroundElement" style={styles.cardHeader}>
+                  <ThemedText type="smallBold">{st.name}</ThemedText>
+                  <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+                </ThemedView>
+                <ThemedText themeColor="textSecondary">
+                  {st.startTime}–{st.endTime}
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
+          ))}
+
+          <Pressable onPress={() => setEditing({ mode: 'new', workplaceId: workplace.id })}>
+            <ThemedView style={[styles.addButton, { borderColor: theme.primary }]}>
+              <Ionicons name="add" size={18} color={theme.primary} />
+              <ThemedText style={{ color: theme.primary }}>新增班別</ThemedText>
+            </ThemedView>
+          </Pressable>
+        </ThemedView>
+      ))}
+    </ScrollView>
+  );
+}
+
+function ShiftTypeForm({
+  workplace,
+  initial,
+  onSubmit,
+  onCancel,
+  onDelete,
+}: {
+  workplace: Workplace;
+  initial?: ShiftType;
+  onSubmit: (values: ShiftTypeFormValues) => Promise<void>;
+  onCancel: () => void;
+  onDelete?: () => void;
+}) {
+  const theme = useTheme();
+  const isMonthly = workplace.wageType === 'monthly';
+  const isDaily = workplace.wageType === 'daily';
+  const isHourly = workplace.wageType === 'hourly';
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<z.input<typeof shiftTypeFormShape>, any, ShiftTypeFormValues>({
+    resolver: zodResolver(buildShiftTypeFormSchema(workplace.wageType as 'monthly' | 'daily' | 'hourly')),
+    defaultValues: initial
+      ? {
+          name: initial.name,
+          startTime: initial.startTime ?? '',
+          endTime: initial.endTime ?? '',
+          useDefaultRate: initial.hourlyRate == null && initial.dailyRate == null,
+          hourlyRate: initial.hourlyRate ?? undefined,
+          dailyRate: initial.dailyRate ?? undefined,
+          breakMinutes: initial.breakMinutes ?? 0,
+          breakPaid: initial.breakPaid ?? false,
+          nightRateEnabled: initial.nightRateEnabled,
+          nightMultiplier: initial.nightMultiplier ?? emptyShiftTypeValues.nightMultiplier,
+          nightStart: initial.nightStart ?? emptyShiftTypeValues.nightStart,
+          nightEnd: initial.nightEnd ?? emptyShiftTypeValues.nightEnd,
+          holidayRateEnabled: initial.holidayRateEnabled,
+          holidayPercent: initial.holidayPercent ?? emptyShiftTypeValues.holidayPercent,
+        }
+      : emptyShiftTypeValues,
+  });
+
+  const useDefaultRate = watch('useDefaultRate');
+  const nightEnabled = watch('nightRateEnabled');
+  const holidayEnabled = watch('holidayRateEnabled');
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ThemedView type="backgroundElement" style={styles.formHeader}>
+        <Pressable onPress={onCancel}>
+          <ThemedText style={{ color: theme.primary }}>取消</ThemedText>
+        </Pressable>
+        <ThemedText type="smallBold">{initial ? '編輯班別' : '新增班別'}</ThemedText>
+        <Pressable onPress={handleSubmit(onSubmit)} disabled={isSubmitting}>
+          <ThemedText style={{ color: theme.primary }}>儲存</ThemedText>
+        </Pressable>
+      </ThemedView>
+
+      <FieldLabel label="所屬工作地點">
+        <ThemedView style={styles.lockedField}>
+          <ThemedText themeColor="textSecondary">{workplace.name}</ThemedText>
+        </ThemedView>
+      </FieldLabel>
+
+      <FieldLabel label="班別名稱" error={errors.name?.message}>
+        <Controller
+          control={control}
+          name="name"
+          render={({ field }) => (
+            <TextInput
+              value={field.value}
+              onChangeText={field.onChange}
+              placeholder="例如:早班"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+            />
+          )}
+        />
+      </FieldLabel>
+
+      <ThemedView type="backgroundElement" style={styles.timeRow}>
+        <FieldLabel label="開始時間" error={errors.startTime?.message} flex>
+          <Controller
+            control={control}
+            name="startTime"
+            render={({ field }) => (
+              <TextInput
+                value={field.value}
+                onChangeText={field.onChange}
+                placeholder="09:00"
+                placeholderTextColor={theme.textSecondary}
+                style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+              />
+            )}
+          />
+        </FieldLabel>
+        <FieldLabel label="結束時間" error={errors.endTime?.message} flex>
+          <Controller
+            control={control}
+            name="endTime"
+            render={({ field }) => (
+              <TextInput
+                value={field.value}
+                onChangeText={field.onChange}
+                placeholder="17:00"
+                placeholderTextColor={theme.textSecondary}
+                style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+              />
+            )}
+          />
+        </FieldLabel>
+      </ThemedView>
+      {isDaily && (
+        <ThemedText type="small" themeColor="textSecondary">
+          日薪固定領一筆金額,起訖時間只是記錄用,不影響金額
+        </ThemedText>
+      )}
+
+      {isMonthly ? (
+        <ThemedText themeColor="textSecondary">
+          月薪工作地點的班別只用來記出勤工時,不會另外計算逐班金額。
+        </ThemedText>
+      ) : (
+        <>
+          <ThemedView type="backgroundElement" style={styles.switchRow}>
+            <ThemedText>套用工作預設薪資</ThemedText>
+            <Controller
+              control={control}
+              name="useDefaultRate"
+              render={({ field }) => (
+                <Switch value={field.value} onValueChange={field.onChange} trackColor={{ true: theme.primary }} />
+              )}
+            />
+          </ThemedView>
+
+          {useDefaultRate ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              套用工作預設的{isDaily ? '日薪' : '時薪'}:$
+              {(isDaily ? workplace.defaultDailyRate : workplace.defaultHourlyRate)?.toLocaleString() ??
+                '尚未在工作設定填寫,請先去補上或在這裡覆蓋'}
+            </ThemedText>
+          ) : isDaily ? (
+            <FieldLabel label="這個班別的日薪金額(覆蓋預設值)" error={errors.dailyRate?.message}>
+              <Controller
+                control={control}
+                name="dailyRate"
+                render={({ field }) => (
+                  <TextInput
+                    value={field.value != null ? String(field.value) : ''}
+                    onChangeText={field.onChange}
+                    keyboardType="numeric"
+                    placeholder="1600"
+                    placeholderTextColor={theme.textSecondary}
+                    style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                  />
+                )}
+              />
+            </FieldLabel>
+          ) : (
+            <FieldLabel label="這個班別的時薪(覆蓋預設值)" error={errors.hourlyRate?.message}>
+              <Controller
+                control={control}
+                name="hourlyRate"
+                render={({ field }) => (
+                  <TextInput
+                    value={field.value != null ? String(field.value) : ''}
+                    onChangeText={field.onChange}
+                    keyboardType="numeric"
+                    placeholder="183"
+                    placeholderTextColor={theme.textSecondary}
+                    style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                  />
+                )}
+              />
+            </FieldLabel>
+          )}
+        </>
+      )}
+
+      {isHourly && (
+        <>
+          <ThemedView type="backgroundElement" style={styles.timeRow}>
+            <FieldLabel label="休息時間(分鐘)" flex>
+              <Controller
+                control={control}
+                name="breakMinutes"
+                render={({ field }) => (
+                  <TextInput
+                    value={field.value != null ? String(field.value) : ''}
+                    onChangeText={field.onChange}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={theme.textSecondary}
+                    style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                  />
+                )}
+              />
+            </FieldLabel>
+            <ThemedView style={[styles.switchRow, styles.flex1]}>
+              <ThemedText type="small" themeColor="textSecondary">
+                休息時間計薪
+              </ThemedText>
+              <Controller
+                control={control}
+                name="breakPaid"
+                render={({ field }) => (
+                  <Switch value={field.value} onValueChange={field.onChange} trackColor={{ true: theme.primary }} />
+                )}
+              />
+            </ThemedView>
+          </ThemedView>
 
           <SwitchRow label="深夜加給" name="nightRateEnabled" control={control} />
           <ThemedView style={[styles.subFields, !nightEnabled && styles.disabledSection]}>
-            <FieldLabel label="深夜倍率" error={errors.nightMultiplier?.message}>
+            <FieldLabel label="深夜倍率">
               <Controller
                 control={control}
                 name="nightMultiplier"
                 render={({ field }) => (
                   <TextInput
                     editable={nightEnabled}
-                    value={String(field.value ?? '')}
+                    value={field.value != null ? String(field.value) : ''}
                     onChangeText={field.onChange}
                     keyboardType="numeric"
                     placeholder="1.34"
@@ -220,7 +836,7 @@ function RuleForm({
               />
             </FieldLabel>
             <ThemedView type="backgroundElement" style={styles.timeRow}>
-              <FieldLabel label="開始時段" error={errors.nightStart?.message} flex>
+              <FieldLabel label="開始時段" flex>
                 <Controller
                   control={control}
                   name="nightStart"
@@ -236,7 +852,7 @@ function RuleForm({
                   )}
                 />
               </FieldLabel>
-              <FieldLabel label="結束時段" error={errors.nightEnd?.message} flex>
+              <FieldLabel label="結束時段" flex>
                 <Controller
                   control={control}
                   name="nightEnd"
@@ -257,14 +873,14 @@ function RuleForm({
 
           <SwitchRow label="假日加給" name="holidayRateEnabled" control={control} />
           <ThemedView style={[styles.subFields, !holidayEnabled && styles.disabledSection]}>
-            <FieldLabel label="假日加成百分比" error={errors.holidayPercent?.message}>
+            <FieldLabel label="假日加成百分比">
               <Controller
                 control={control}
                 name="holidayPercent"
                 render={({ field }) => (
                   <TextInput
                     editable={holidayEnabled}
-                    value={String(field.value ?? '')}
+                    value={field.value != null ? String(field.value) : ''}
                     onChangeText={field.onChange}
                     keyboardType="numeric"
                     placeholder="33"
@@ -275,11 +891,23 @@ function RuleForm({
               />
             </FieldLabel>
           </ThemedView>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+        </>
+      )}
+
+      {onDelete && (
+        <Pressable onPress={onDelete}>
+          <ThemedView style={[styles.deleteButton, { borderColor: theme.danger }]}>
+            <ThemedText style={{ color: theme.danger }}>刪除這個班別</ThemedText>
+          </ThemedView>
+        </Pressable>
+      )}
+    </ScrollView>
   );
 }
+
+// ---------------------------------------------------------------------------
+// 共用小元件
+// ---------------------------------------------------------------------------
 
 function FieldLabel({
   label,
@@ -299,7 +927,7 @@ function FieldLabel({
       </ThemedText>
       {children}
       {error && (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.errorText}>
+        <ThemedText type="small" style={styles.errorText}>
           {error}
         </ThemedText>
       )}
@@ -316,11 +944,7 @@ function SwitchRow({ label, name, control }: { label: string; name: 'nightRateEn
         control={control}
         name={name}
         render={({ field }) => (
-          <Switch
-            value={field.value}
-            onValueChange={field.onChange}
-            trackColor={{ true: theme.primary }}
-          />
+          <Switch value={field.value} onValueChange={field.onChange} trackColor={{ true: theme.primary }} />
         )}
       />
     </ThemedView>
@@ -339,32 +963,64 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
+    paddingTop: Spacing.three,
     paddingBottom: BottomTabInset + Spacing.five,
     gap: Spacing.three,
   },
-  ruleCard: {
+  rootMenuCard: {
     borderRadius: CardRadius,
     padding: Spacing.four,
-    gap: Spacing.one,
-  },
-  ruleCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  badgeRow: {
+  hubHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
+  },
+  backPressable: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+    paddingVertical: Spacing.two,
+    paddingRight: Spacing.two,
+  },
+  headerSpacer: {
+    width: 60,
+  },
+  subTabRow: {
     flexDirection: 'row',
     gap: Spacing.two,
-    marginTop: Spacing.one,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
   },
-  badge: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 4,
+  subTabButtonPressable: {
+    flex: 1,
+  },
+  subTabButton: {
     borderRadius: Spacing.five,
+    paddingVertical: Spacing.two,
+    alignItems: 'center',
   },
-  badgeText: {
-    color: '#ffffff',
+  card: {
+    borderRadius: CardRadius,
+    padding: Spacing.four,
+    gap: Spacing.one,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  shiftTypeGroup: {
+    gap: Spacing.two,
   },
   addButton: {
     flexDirection: 'row',
@@ -387,6 +1043,21 @@ const styles = StyleSheet.create({
   },
   flex1: {
     flex: 1,
+  },
+  lockedField: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.three,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  segmentedRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  segmentedButton: {
+    borderRadius: Spacing.three,
+    paddingVertical: Spacing.two,
+    alignItems: 'center',
   },
   input: {
     borderWidth: 1,
@@ -414,5 +1085,11 @@ const styles = StyleSheet.create({
   timeRow: {
     flexDirection: 'row',
     gap: Spacing.three,
+  },
+  deleteButton: {
+    borderRadius: CardRadius,
+    borderWidth: 1.5,
+    paddingVertical: Spacing.three,
+    alignItems: 'center',
   },
 });

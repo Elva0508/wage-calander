@@ -1,115 +1,117 @@
-import { format } from 'date-fns';
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useMemo } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DayDetailSheet } from '@/components/day-detail-sheet';
+import { SchedulingSheet } from '@/components/scheduling-sheet';
+import { ShiftEditSheet } from '@/components/shift-edit-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, CardRadius, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { calculateShiftHours, calculateShiftWage } from '@/lib/wage';
 import { useDataStore } from '@/store/data-store';
+import { useUiStore } from '@/store/ui-store';
 
-export default function CalendarScreen() {
+export default function TodayScreen() {
   const theme = useTheme();
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const [selectedDate, setSelectedDate] = useState(today);
+  const todayMode = useUiStore((s) => s.todayMode);
+  const selectedDate = useUiStore((s) => s.selectedDate);
+  const setSelectedDate = useUiStore((s) => s.setSelectedDate);
+  const schedulingDate = useUiStore((s) => s.schedulingDate);
+  const setSchedulingDate = useUiStore((s) => s.setSchedulingDate);
+  const enterSchedulingMode = useUiStore((s) => s.enterSchedulingMode);
+  const openDayDetail = useUiStore((s) => s.openDayDetail);
+
   const shifts = useDataStore((state) => state.shifts);
-  const wageRules = useDataStore((state) => state.wageRules);
-  const deleteShift = useDataStore((state) => state.deleteShift);
+
+  const highlightedDate = todayMode === 'scheduling' ? schedulingDate : selectedDate;
 
   const markedDates = useMemo(() => {
     const marks: Record<string, any> = {};
     for (const shift of shifts) {
-      marks[shift.date] = {
-        ...(marks[shift.date] ?? {}),
-        marked: true,
-        dotColor: theme.primary,
-      };
+      if (shift.isRestDay) {
+        marks[shift.date] = {
+          ...(marks[shift.date] ?? {}),
+          marked: true,
+          dotColor: theme.textSecondary,
+        };
+      } else {
+        marks[shift.date] = {
+          ...(marks[shift.date] ?? {}),
+          marked: true,
+          dotColor: theme.primary,
+        };
+      }
     }
-    marks[selectedDate] = {
-      ...(marks[selectedDate] ?? {}),
+    marks[highlightedDate] = {
+      ...(marks[highlightedDate] ?? {}),
       selected: true,
       selectedColor: theme.primary,
     };
     return marks;
-  }, [shifts, selectedDate, theme.primary]);
+  }, [shifts, highlightedDate, theme.primary, theme.textSecondary]);
 
-  const dayShifts = useMemo(
-    () =>
-      shifts
-        .filter((s) => s.date === selectedDate)
-        .sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    [shifts, selectedDate],
-  );
-
-  const onDelete = (id: number) => {
-    Alert.alert('刪除班次', '確定要刪除這筆班次嗎?此動作無法復原。', [
-      { text: '取消', style: 'cancel' },
-      { text: '刪除', style: 'destructive', onPress: () => deleteShift(id) },
-    ]);
+  const calendarTheme = {
+    calendarBackground: theme.backgroundElement,
+    dayTextColor: theme.text,
+    monthTextColor: theme.text,
+    textDisabledColor: theme.textSecondary,
+    todayTextColor: theme.primary,
+    arrowColor: theme.primary,
   };
+
+  if (todayMode === 'scheduling') {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.schedulingCalendarArea}>
+            <Calendar
+              current={schedulingDate}
+              markedDates={markedDates}
+              onDayPress={(day) => setSchedulingDate(day.dateString)}
+              theme={calendarTheme}
+              style={styles.calendar}
+            />
+          </View>
+          <View style={styles.schedulingSheetArea}>
+            <SchedulingSheet />
+          </View>
+        </SafeAreaView>
+        <DayDetailSheet />
+        <ShiftEditSheet />
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <ThemedText type="subtitle">月曆</ThemedText>
+          <ThemedText type="subtitle">今日</ThemedText>
 
           <Calendar
             current={selectedDate}
             markedDates={markedDates}
-            onDayPress={(day) => setSelectedDate(day.dateString)}
-            theme={{
-              calendarBackground: theme.backgroundElement,
-              dayTextColor: theme.text,
-              monthTextColor: theme.text,
-              textDisabledColor: theme.textSecondary,
-              todayTextColor: theme.primary,
-              arrowColor: theme.primary,
+            onDayPress={(day) => {
+              setSelectedDate(day.dateString);
+              openDayDetail(day.dateString);
             }}
+            theme={calendarTheme}
             style={styles.calendar}
           />
-
-          <ThemedView style={styles.dayHeader}>
-            <ThemedText type="smallBold">{selectedDate}</ThemedText>
-            <Pressable onPress={() => router.push({ pathname: '/add-shift', params: { date: selectedDate } })}>
-              <ThemedText style={{ color: theme.primary }}>+ 新增班次</ThemedText>
-            </Pressable>
-          </ThemedView>
-
-          {dayShifts.length === 0 ? (
-            <ThemedText themeColor="textSecondary">這天還沒有排班。</ThemedText>
-          ) : (
-            dayShifts.map((shift) => {
-              const rule = wageRules.find((r) => r.id === shift.wageRuleId);
-              const hours = calculateShiftHours(shift);
-              const pay = rule ? calculateShiftWage(shift, rule) : null;
-              return (
-                <Pressable
-                  key={shift.id}
-                  onPress={() => router.push({ pathname: '/add-shift', params: { id: String(shift.id) } })}
-                  onLongPress={() => onDelete(shift.id)}>
-                  <ThemedView type="backgroundElement" style={styles.shiftCard}>
-                    <ThemedView type="backgroundElement" style={styles.shiftCardHeader}>
-                      <ThemedText type="smallBold">{rule?.jobName ?? '未知工作'}</ThemedText>
-                      {pay != null && (
-                        <ThemedText style={{ color: theme.primary }}>${pay.toLocaleString()}</ThemedText>
-                      )}
-                    </ThemedView>
-                    <ThemedText themeColor="textSecondary">
-                      {shift.startTime}–{shift.endTime}({hours.toFixed(1)} 小時)
-                    </ThemedText>
-                    {shift.note && <ThemedText themeColor="textSecondary">{shift.note}</ThemedText>}
-                  </ThemedView>
-                </Pressable>
-              );
-            })
-          )}
         </ScrollView>
+
+        <Pressable onPress={() => enterSchedulingMode()} style={styles.fabWrapper}>
+          <ThemedView style={[styles.fab, { backgroundColor: theme.primary }]}>
+            <Ionicons name="add" size={28} color="#ffffff" />
+          </ThemedView>
+        </Pressable>
       </SafeAreaView>
+
+      <DayDetailSheet />
+      <ShiftEditSheet />
     </ThemedView>
   );
 }
@@ -127,26 +129,35 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
-    paddingBottom: BottomTabInset + Spacing.five,
+    paddingBottom: BottomTabInset + Spacing.six,
     gap: Spacing.three,
   },
   calendar: {
     borderRadius: CardRadius,
   },
-  dayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.two,
+  fabWrapper: {
+    position: 'absolute',
+    right: Spacing.four,
+    bottom: BottomTabInset + Spacing.four,
   },
-  shiftCard: {
-    borderRadius: CardRadius,
-    padding: Spacing.four,
-    gap: Spacing.half,
-  },
-  shiftCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  fab: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  schedulingCalendarArea: {
+    flex: 1,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
+  },
+  schedulingSheetArea: {
+    paddingBottom: BottomTabInset,
   },
 });

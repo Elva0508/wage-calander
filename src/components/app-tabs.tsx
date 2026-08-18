@@ -3,10 +3,12 @@ import { Tabs } from 'expo-router';
 import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { useUiStore } from '@/store/ui-store';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme ?? 'light'];
+  const resetToday = useUiStore((s) => s.resetToday);
 
   return (
     <Tabs
@@ -22,19 +24,13 @@ export default function AppTabs() {
       <Tabs.Screen
         name="index"
         options={{
-          title: '月曆',
+          title: '今日',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar-outline" size={size} color={color} />
           ),
         }}
-      />
-      <Tabs.Screen
-        name="add-shift"
-        options={{
-          title: '新增',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle-outline" size={size} color={color} />
-          ),
+        listeners={{
+          tabPress: () => resetToday(),
         }}
       />
       <Tabs.Screen
