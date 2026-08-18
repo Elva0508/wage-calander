@@ -9,13 +9,20 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, CardRadius, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { calculateShiftHours, calculateShiftWage } from '@/lib/wage';
+import { resolveShiftWageInput, resolveShiftWorkplaceId } from '@/lib/resolve-shift-wage-input';
 import { useDataStore } from '@/store/data-store';
+
+const UNASSIGNED_KEY = -1;
 
 export default function WageScreen() {
   const theme = useTheme();
   const shifts = useDataStore((state) => state.shifts);
-  const wageRules = useDataStore((state) => state.wageRules);
+  const shiftTypes = useDataStore((state) => state.shiftTypes);
+  const workplaces = useDataStore((state) => state.workplaces);
   const [monthAnchor, setMonthAnchor] = useState(new Date());
+
+  const shiftTypesById = useMemo(() => new Map(shiftTypes.map((st) => [st.id, st])), [shiftTypes]);
+  const workplacesById = useMemo(() => new Map(workplaces.map((w) => [w.id, w])), [workplaces]);
 
   const monthLabel = format(monthAnchor, 'yyyy 年 M 月');
   const rangeStart = format(startOfMonth(monthAnchor), 'yyyy-MM-dd');
@@ -24,30 +31,43 @@ export default function WageScreen() {
   const breakdown = useMemo(() => {
     const monthShifts = shifts.filter((s) => s.date >= rangeStart && s.date <= rangeEnd);
 
-    const byRule = new Map<number, { hours: number; pay: number }>();
+    const byWorkplace = new Map<number, { hours: number; pay: number }>();
     let totalHours = 0;
     let totalPay = 0;
 
     for (const shift of monthShifts) {
-      const rule = wageRules.find((r) => r.id === shift.wageRuleId);
-      if (!rule) continue;
-      const hours = calculateShiftHours(shift);
-      const pay = calculateShiftWage(shift, rule);
+      const wageInput = resolveShiftWageInput(shift, shiftTypesById, workplacesById);
+      if (!wageInput) continue;
+
+      // 全日班次沒有起訖時間,沒有工時可算,但薪資(日薪固定金額)還是要算——
+      // 不能因為缺時間就整筆跳過,否則全日班次的金額會從薪資總覽裡消失
+      const shiftType = shift.shiftTypeId != null ? shiftTypesById.get(shift.shiftTypeId) : undefined;
+      const hours =
+        shift.startTime != null && shift.endTime != null
+          ? calculateShiftHours(
+              { startTime: shift.startTime, endTime: shift.endTime },
+              { breakMinutes: shiftType?.breakMinutes ?? shift.breakMinutes, breakPaid: shiftType?.breakPaid ?? shift.breakPaid },
+            )
+          : 0;
+      const pay = calculateShiftWage(wageInput);
+      const workplaceId = resolveShiftWorkplaceId(shift, shiftTypesById) ?? UNASSIGNED_KEY;
+
       totalHours += hours;
       totalPay += pay;
-      const existing = byRule.get(rule.id) ?? { hours: 0, pay: 0 };
-      byRule.set(rule.id, { hours: existing.hours + hours, pay: existing.pay + pay });
+      const existing = byWorkplace.get(workplaceId) ?? { hours: 0, pay: 0 };
+      byWorkplace.set(workplaceId, { hours: existing.hours + hours, pay: existing.pay + pay });
     }
 
     return {
       totalHours,
       totalPay,
-      byJob: Array.from(byRule.entries()).map(([wageRuleId, sums]) => ({
-        rule: wageRules.find((r) => r.id === wageRuleId)!,
+      byWorkplace: Array.from(byWorkplace.entries()).map(([workplaceId, sums]) => ({
+        name: workplaceId === UNASSIGNED_KEY ? '未指定' : workplacesById.get(workplaceId)?.name ?? '未知工作地點',
+        key: workplaceId,
         ...sums,
       })),
     };
-  }, [shifts, wageRules, rangeStart, rangeEnd]);
+  }, [shifts, shiftTypesById, workplacesById, rangeStart, rangeEnd]);
 
   return (
     <ThemedView style={styles.container}>
@@ -87,13 +107,13 @@ export default function WageScreen() {
             </ThemedView>
           </ThemedView>
 
-          <ThemedText type="smallBold">依工作拆算</ThemedText>
-          {breakdown.byJob.length === 0 ? (
+          <ThemedText type="smallBold">依工作地點拆算</ThemedText>
+          {breakdown.byWorkplace.length === 0 ? (
             <ThemedText themeColor="textSecondary">這個月還沒有任何排班紀錄。</ThemedText>
           ) : (
-            breakdown.byJob.map(({ rule, hours, pay }) => (
-              <ThemedView key={rule.id} type="backgroundElement" style={styles.jobCard}>
-                <ThemedText type="smallBold">{rule.jobName}</ThemedText>
+            breakdown.byWorkplace.map(({ key, name, hours, pay }) => (
+              <ThemedView key={key} type="backgroundElement" style={styles.jobCard}>
+                <ThemedText type="smallBold">{name}</ThemedText>
                 <ThemedView type="backgroundElement" style={styles.jobCardRow}>
                   <ThemedText themeColor="textSecondary">{hours.toFixed(1)} 小時</ThemedText>
                   <ThemedText style={{ color: theme.primary }}>${pay.toLocaleString()}</ThemedText>

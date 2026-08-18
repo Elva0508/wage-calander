@@ -3,8 +3,10 @@ export type ShiftTimeRange = {
   endTime: string;
 };
 
-export type WageRuleInput = {
+export type WageRateInput = {
   baseRate: number;
+  breakMinutes?: number | null;
+  breakPaid?: boolean | null;
   nightRateEnabled: boolean;
   nightMultiplier?: number | null;
   nightStart?: string | null;
@@ -12,6 +14,25 @@ export type WageRuleInput = {
   holidayRateEnabled: boolean;
   holidayPercent?: number | null;
 };
+
+export type HourlyWageInput = ShiftTimeRange &
+  WageRateInput & {
+    isFullDay?: false;
+    isHoliday?: boolean;
+    manualWageOverride?: number | null;
+  };
+
+/**
+ * 全日班次:固定領 dailyAmount,不管實際工作多久,沒有起訖時間可算(例如日結工地師傅)。
+ * 休息時間/深夜加給/假日加給在這種模式下都不適用。
+ */
+export type FullDayWageInput = {
+  isFullDay: true;
+  dailyAmount: number;
+  manualWageOverride?: number | null;
+};
+
+export type WageCalcInput = HourlyWageInput | FullDayWageInput;
 
 function toMinutes(time: string): number {
   const [hours, minutes] = time.split(':').map(Number);
@@ -22,24 +43,36 @@ function overlapMinutes(aStart: number, aEnd: number, bStart: number, bEnd: numb
   return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
 }
 
-export function calculateShiftHours(shift: ShiftTimeRange): number {
+export function calculateShiftHours(
+  shift: ShiftTimeRange,
+  opts: { breakMinutes?: number | null; breakPaid?: boolean | null } = {},
+): number {
   const start = toMinutes(shift.startTime);
   let end = toMinutes(shift.endTime);
   if (end <= start) end += 24 * 60;
-  return (end - start) / 60;
+
+  const unpaidBreakMinutes = !opts.breakPaid && opts.breakMinutes ? opts.breakMinutes : 0;
+  return (end - start - unpaidBreakMinutes) / 60;
 }
 
-export function calculateShiftWage(shift: ShiftTimeRange, rule: WageRuleInput, opts: { isHoliday?: boolean } = {}): number {
-  const shiftStart = toMinutes(shift.startTime);
-  let shiftEnd = toMinutes(shift.endTime);
+export function calculateShiftWage(input: WageCalcInput): number {
+  if (input.manualWageOverride != null) return input.manualWageOverride;
+
+  if (input.isFullDay) {
+    return Math.round(input.dailyAmount);
+  }
+
+  const shiftStart = toMinutes(input.startTime);
+  let shiftEnd = toMinutes(input.endTime);
   if (shiftEnd <= shiftStart) shiftEnd += 24 * 60;
 
-  const totalMinutes = shiftEnd - shiftStart;
+  const grossMinutes = shiftEnd - shiftStart;
+  const unpaidBreakMinutes = !input.breakPaid && input.breakMinutes ? input.breakMinutes : 0;
 
   let nightMinutes = 0;
-  if (rule.nightRateEnabled && rule.nightStart && rule.nightEnd && rule.nightMultiplier) {
-    const nightStart = toMinutes(rule.nightStart);
-    let nightEnd = toMinutes(rule.nightEnd);
+  if (input.nightRateEnabled && input.nightStart && input.nightEnd && input.nightMultiplier) {
+    const nightStart = toMinutes(input.nightStart);
+    let nightEnd = toMinutes(input.nightEnd);
     if (nightEnd <= nightStart) nightEnd += 24 * 60;
 
     // 深夜時段跟班次都可能跨過午夜,把深夜時段在前一天/當天/後一天各算一次再加總重疊分鐘數,
@@ -49,21 +82,24 @@ export function calculateShiftWage(shift: ShiftTimeRange, rule: WageRuleInput, o
     }
   }
 
-  const regularMinutes = totalMinutes - nightMinutes;
-  let wage = (regularMinutes / 60) * rule.baseRate + (nightMinutes / 60) * rule.baseRate * (rule.nightMultiplier ?? 1);
+  const regularMinutesGross = grossMinutes - nightMinutes;
+  // 沒有記錄休息時段的確切起訖,假設不計薪休息優先算在一般時段裡,
+  // 超過一般時段長度的部分才反過來扣深夜時段
+  const regularMinutes = Math.max(0, regularMinutesGross - unpaidBreakMinutes);
+  const overflowIntoNight = Math.max(0, unpaidBreakMinutes - regularMinutesGross);
+  const paidNightMinutes = Math.max(0, nightMinutes - overflowIntoNight);
 
-  if (rule.holidayRateEnabled && opts.isHoliday && rule.holidayPercent) {
-    wage *= 1 + rule.holidayPercent / 100;
+  let wage =
+    (regularMinutes / 60) * input.baseRate +
+    (paidNightMinutes / 60) * input.baseRate * (input.nightMultiplier ?? 1);
+
+  if (input.holidayRateEnabled && input.isHoliday && input.holidayPercent) {
+    wage *= 1 + input.holidayPercent / 100;
   }
 
   return Math.round(wage);
 }
 
-export function calculateMonthlyWage(
-  entries: Array<{ shift: ShiftTimeRange; rule: WageRuleInput; isHoliday?: boolean }>,
-): number {
-  return entries.reduce(
-    (total, entry) => total + calculateShiftWage(entry.shift, entry.rule, { isHoliday: entry.isHoliday }),
-    0,
-  );
+export function calculateMonthlyWage(entries: WageCalcInput[]): number {
+  return entries.reduce((total, entry) => total + calculateShiftWage(entry), 0);
 }
