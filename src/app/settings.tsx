@@ -9,10 +9,11 @@ import { z } from 'zod';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, CardRadius, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 import { ShiftType, Workplace } from '@/db/schema';
+import { useTheme } from '@/hooks/use-theme';
 import { resolvePayPeriodsInRange } from '@/lib/pay-period';
 import { useDataStore } from '@/store/data-store';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -109,7 +110,7 @@ const workplaceFormSchema = z
     name: z.string().trim().min(1, '請輸入工作地點名稱'),
     wageType: z.enum(['monthly', 'daily', 'hourly']),
     monthlySalary: z.coerce.number().positive().optional(),
-    onboardDate: z.string().optional(),
+    onboardDate: z.date().optional(),
     isCurrentlyEmployed: z.boolean().optional(),
     endDate: z.string().optional(),
     defaultHourlyRate: z.coerce.number().positive().optional(),
@@ -152,10 +153,14 @@ function WorkplaceSettings() {
         initial={editing}
         onCancel={() => setEditingId(null)}
         onSubmit={async (values) => {
+          const workplaceValues = {
+            ...values,
+            onboardDate: values.onboardDate ? formatDateOnly(values.onboardDate) : null,
+          };
           if (typeof editingId === 'number') {
-            await updateWorkplace(editingId, values);
+            await updateWorkplace(editingId, workplaceValues);
           } else {
-            await addWorkplace(values);
+            await addWorkplace(workplaceValues);
           }
           setEditingId(null);
         }}
@@ -238,7 +243,7 @@ function WorkplaceForm({
           name: initial.name,
           wageType: initial.wageType as 'monthly' | 'daily' | 'hourly',
           monthlySalary: initial.monthlySalary ?? undefined,
-          onboardDate: initial.onboardDate ?? '',
+          onboardDate: initial.onboardDate ? parseDateOnly(initial.onboardDate) : undefined,
           isCurrentlyEmployed: initial.isCurrentlyEmployed ?? true,
           endDate: initial.endDate ?? '',
           defaultHourlyRate: initial.defaultHourlyRate ?? undefined,
@@ -346,12 +351,13 @@ function WorkplaceForm({
               control={control}
               name="onboardDate"
               render={({ field }) => (
-                <TextInput
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={theme.textSecondary}
-                  style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                <DateTimePicker
+                  testID="dateTimePicker"
+                  value={field.value ?? new Date()}
+                  mode="date"
+                  onChange={(event, selectedDate) => {
+                    if (event.type !== 'dismissed' && selectedDate) field.onChange(selectedDate);
+                  }}
                 />
               )}
             />
@@ -686,6 +692,24 @@ function formatDateOnly(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function parseDateOnly(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatTimeOnly(date: Date): string {
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${hour}:${minute}`;
+}
+
+function parseTimeOnly(timeStr: string): Date {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
+
 function shortDate(dateStr: string): string {
   const [, month, day] = dateStr.split('-');
   return `${Number(month)}/${Number(day)}`;
@@ -971,12 +995,15 @@ function ShiftTypeForm({
             control={control}
             name="startTime"
             render={({ field }) => (
-              <TextInput
-                value={field.value}
-                onChangeText={field.onChange}
-                placeholder="09:00"
-                placeholderTextColor={theme.textSecondary}
-                style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+              <DateTimePicker
+                testID="startTimePicker"
+                value={field.value ? parseTimeOnly(field.value) : new Date()}
+                mode="time"
+                is24Hour
+                onChange={(event, selectedDate) => {
+                  if (event.type !== 'dismissed' && selectedDate) field.onChange(formatTimeOnly(selectedDate));
+                }}
+                // display='spinner'
               />
             )}
           />
