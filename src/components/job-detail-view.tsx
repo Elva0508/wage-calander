@@ -79,8 +79,11 @@ export function JobDetailView({
       },
       { completed: { hours: 0, pay: 0 }, pending: { hours: 0, pay: 0 } },
     );
-    // 月薪工作不逐班計薪,逐日列表每一列仍顯示 $0,只有這裡的彙總卡片需要攤入月薪
-    if (workplace?.wageType === 'monthly' && rows.length > 0) {
+    // 月薪工作不逐班計薪,逐日列表每一列仍顯示 $0,只有這裡的彙總卡片需要攤入月薪。
+    // 月薪本身不是靠有沒有排班紀錄才存在(跟發薪日曆同一份 monthlySalary),即使這段範圍內
+    // 完全沒有排班(例如從發薪日曆點進某個計薪區間,但那段時間沒有記錄班次),金額仍要攤算,
+    // 否則會跟發薪日曆本來就顯示出來的金額不一致
+    if (workplace?.wageType === 'monthly') {
       acc.completed.pay += calculateProratedMonthlySalary(workplace.monthlySalary ?? 0, rangeStart, rangeEnd);
     }
     return acc;
