@@ -1,129 +1,48 @@
-import { Ionicons } from '@expo/vector-icons';
-import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { HoursReportView } from '@/components/hours-report-view';
+import { PaydayCalendarView } from '@/components/payday-calendar-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, CardRadius, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { calculateShiftHours, calculateShiftWage } from '@/lib/wage';
-import { resolveShiftWageInput, resolveShiftWorkplaceId } from '@/lib/resolve-shift-wage-input';
-import { useDataStore } from '@/store/data-store';
 
-const UNASSIGNED_KEY = -1;
+type ViewMode = 'hours' | 'payday';
 
 export default function WageScreen() {
-  const theme = useTheme();
-  const shifts = useDataStore((state) => state.shifts);
-  const shiftTypes = useDataStore((state) => state.shiftTypes);
-  const workplaces = useDataStore((state) => state.workplaces);
-  const [monthAnchor, setMonthAnchor] = useState(new Date());
-
-  const shiftTypesById = useMemo(() => new Map(shiftTypes.map((st) => [st.id, st])), [shiftTypes]);
-  const workplacesById = useMemo(() => new Map(workplaces.map((w) => [w.id, w])), [workplaces]);
-
-  const monthLabel = format(monthAnchor, 'yyyy 年 M 月');
-  const rangeStart = format(startOfMonth(monthAnchor), 'yyyy-MM-dd');
-  const rangeEnd = format(endOfMonth(monthAnchor), 'yyyy-MM-dd');
-
-  const breakdown = useMemo(() => {
-    const monthShifts = shifts.filter((s) => s.date >= rangeStart && s.date <= rangeEnd);
-
-    const byWorkplace = new Map<number, { hours: number; pay: number }>();
-    let totalHours = 0;
-    let totalPay = 0;
-
-    for (const shift of monthShifts) {
-      const wageInput = resolveShiftWageInput(shift, shiftTypesById, workplacesById);
-      if (!wageInput) continue;
-
-      // 全日班次沒有起訖時間,沒有工時可算,但薪資(日薪固定金額)還是要算——
-      // 不能因為缺時間就整筆跳過,否則全日班次的金額會從薪資總覽裡消失
-      const shiftType = shift.shiftTypeId != null ? shiftTypesById.get(shift.shiftTypeId) : undefined;
-      const hours =
-        shift.startTime != null && shift.endTime != null
-          ? calculateShiftHours(
-              { startTime: shift.startTime, endTime: shift.endTime },
-              { breakMinutes: shiftType?.breakMinutes ?? shift.breakMinutes, breakPaid: shiftType?.breakPaid ?? shift.breakPaid },
-            )
-          : 0;
-      const pay = calculateShiftWage(wageInput);
-      const workplaceId = resolveShiftWorkplaceId(shift, shiftTypesById) ?? UNASSIGNED_KEY;
-
-      totalHours += hours;
-      totalPay += pay;
-      const existing = byWorkplace.get(workplaceId) ?? { hours: 0, pay: 0 };
-      byWorkplace.set(workplaceId, { hours: existing.hours + hours, pay: existing.pay + pay });
-    }
-
-    return {
-      totalHours,
-      totalPay,
-      byWorkplace: Array.from(byWorkplace.entries()).map(([workplaceId, sums]) => ({
-        name: workplaceId === UNASSIGNED_KEY ? '未指定' : workplacesById.get(workplaceId)?.name ?? '未知工作地點',
-        key: workplaceId,
-        ...sums,
-      })),
-    };
-  }, [shifts, shiftTypesById, workplacesById, rangeStart, rangeEnd]);
+  const [viewMode, setViewMode] = useState<ViewMode>('hours');
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <ThemedText type="subtitle">薪資總覽</ThemedText>
-
-          <ThemedView style={styles.monthSwitcher}>
-            <Pressable onPress={() => setMonthAnchor((d) => addMonths(d, -1))}>
-              <Ionicons name="chevron-back" size={22} color={theme.text} />
-            </Pressable>
-            <ThemedText type="smallBold">{monthLabel}</ThemedText>
-            <Pressable onPress={() => setMonthAnchor((d) => addMonths(d, 1))}>
-              <Ionicons name="chevron-forward" size={22} color={theme.text} />
-            </Pressable>
+        <ThemedView style={styles.header}>
+          <ThemedText type="subtitle">統計</ThemedText>
+          <ThemedView style={styles.modeRow}>
+            <ModeButton label="工時統計" active={viewMode === 'hours'} onPress={() => setViewMode('hours')} />
+            <ModeButton label="發薪日曆" active={viewMode === 'payday'} onPress={() => setViewMode('payday')} />
           </ThemedView>
+        </ThemedView>
 
-          <ThemedView style={styles.bigCardRow}>
-            <ThemedView style={[styles.bigCard, { backgroundColor: theme.primarySoft }]}>
-              <ThemedText type="small" themeColor="textSecondary">
-                當月總工時
-              </ThemedText>
-              <ThemedText type="title" style={[styles.bigNumber, { color: theme.primary }]}>
-                {breakdown.totalHours.toFixed(1)}
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                小時
-              </ThemedText>
-            </ThemedView>
-            <ThemedView style={[styles.bigCard, { backgroundColor: theme.accentSoft }]}>
-              <ThemedText type="small" themeColor="textSecondary">
-                預估薪資
-              </ThemedText>
-              <ThemedText type="title" style={[styles.bigNumber, { color: theme.accent }]}>
-                ${breakdown.totalPay.toLocaleString()}
-              </ThemedText>
-            </ThemedView>
-          </ThemedView>
-
-          <ThemedText type="smallBold">依工作地點拆算</ThemedText>
-          {breakdown.byWorkplace.length === 0 ? (
-            <ThemedText themeColor="textSecondary">這個月還沒有任何排班紀錄。</ThemedText>
-          ) : (
-            breakdown.byWorkplace.map(({ key, name, hours, pay }) => (
-              <ThemedView key={key} type="backgroundElement" style={styles.jobCard}>
-                <ThemedText type="smallBold">{name}</ThemedText>
-                <ThemedView type="backgroundElement" style={styles.jobCardRow}>
-                  <ThemedText themeColor="textSecondary">{hours.toFixed(1)} 小時</ThemedText>
-                  <ThemedText style={{ color: theme.primary }}>${pay.toLocaleString()}</ThemedText>
-                </ThemedView>
-              </ThemedView>
-            ))
-          )}
-        </ScrollView>
+        <ThemedView style={styles.body}>
+          {viewMode === 'hours' ? <HoursReportView /> : <PaydayCalendarView />}
+        </ThemedView>
       </SafeAreaView>
     </ThemedView>
+  );
+}
+
+function ModeButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable onPress={onPress} style={styles.modeButtonPressable}>
+      <ThemedView type={active ? 'backgroundSelected' : 'backgroundElement'} style={styles.modeButton}>
+        <ThemedText themeColor={active ? 'text' : 'textSecondary'} style={active ? { color: theme.primary } : undefined}>
+          {label}
+        </ThemedText>
+      </ThemedView>
+    </Pressable>
   );
 }
 
@@ -137,39 +56,27 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
   },
-  scrollContent: {
+  header: {
+    gap: Spacing.three,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
-    paddingBottom: BottomTabInset + Spacing.five,
-    gap: Spacing.three,
   },
-  monthSwitcher: {
+  modeRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing.four,
+    gap: Spacing.two,
   },
-  bigCardRow: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-  },
-  bigCard: {
+  modeButtonPressable: {
     flex: 1,
-    borderRadius: CardRadius,
-    padding: Spacing.four,
-    gap: 2,
   },
-  bigNumber: {
-    fontSize: 32,
-    lineHeight: 38,
+  modeButton: {
+    borderRadius: Spacing.five,
+    paddingVertical: Spacing.two,
+    alignItems: 'center',
   },
-  jobCard: {
-    borderRadius: CardRadius,
-    padding: Spacing.four,
-    gap: Spacing.one,
-  },
-  jobCardRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  body: {
+    flex: 1,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
+    paddingBottom: BottomTabInset + Spacing.five,
   },
 });

@@ -18,6 +18,7 @@ const TABLES = {
   workplaces: schema.workplaces,
   shift_types: schema.shiftTypes,
   shifts: schema.shifts,
+  report_templates: schema.reportTemplates,
 } as const;
 
 function columnInfoFor(table: object): ColumnInfo[] {

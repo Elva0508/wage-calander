@@ -18,6 +18,31 @@ export const workplaces = sqliteTable('workplaces', {
   // 班別自己也可以填 hourlyRate/dailyRate 覆蓋,覆蓋值優先,沒填才 fallback 到這裡
   defaultHourlyRate: real('default_hourly_rate'),
   defaultDailyRate: real('default_daily_rate'),
+
+  // 以下是「發薪設定」,跟 wageType(計薪方式)是兩件獨立的事,不分 wageType 都可以選填。
+  // 沒設定 payCycle 就代表這份工作還沒設定發薪日,發薪日曆會跳過它。
+  // 'monthly'(月結)| 'weekly'(週結)| 'daily'(日結)
+  payCycle: text('pay_cycle'),
+  // payCycle='monthly' 用 DayOfMonth(1-31),'weekly' 用 Weekday(1-7,週一=1)
+  paydayDayOfMonth: integer('payday_day_of_month'),
+  paydayWeekday: integer('payday_weekday'),
+  periodStartDayOfMonth: integer('period_start_day_of_month'),
+  periodStartWeekday: integer('period_start_weekday'),
+  periodEndDayOfMonth: integer('period_end_day_of_month'),
+  // 只有 payCycle='monthly' 才有意義,開啟時 periodEndDayOfMonth 不使用,一律取當月最後一天
+  periodEndIsEndOfMonth: integer('period_end_is_end_of_month', { mode: 'boolean' }),
+  periodEndWeekday: integer('period_end_weekday'),
+});
+
+export const reportTemplates = sqliteTable('report_templates', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  // 'week' | 'biweek' | 'month' | 'year' | 'custom'(自訂類型不存日期,套用時重新選)
+  rangeType: text('range_type').notNull(),
+  // JSON 字串陣列,null 代表全部工作
+  workplaceIds: text('workplace_ids'),
+  showSplit: integer('show_split', { mode: 'boolean' }).notNull().default(true),
+  showBreakdown: integer('show_breakdown', { mode: 'boolean' }).notNull().default(true),
 });
 
 export const shiftTypes = sqliteTable('shift_types', {
@@ -82,3 +107,5 @@ export type ShiftType = typeof shiftTypes.$inferSelect;
 export type NewShiftType = typeof shiftTypes.$inferInsert;
 export type Shift = typeof shifts.$inferSelect;
 export type NewShift = typeof shifts.$inferInsert;
+export type ReportTemplate = typeof reportTemplates.$inferSelect;
+export type NewReportTemplate = typeof reportTemplates.$inferInsert;

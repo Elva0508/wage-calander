@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMemo, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
@@ -11,6 +11,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, CardRadius, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ShiftType, Workplace } from '@/db/schema';
+import { resolvePayPeriodsInRange } from '@/lib/pay-period';
 import { useDataStore } from '@/store/data-store';
 
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -20,6 +21,14 @@ const WAGE_TYPE_LABELS: Record<'monthly' | 'daily' | 'hourly', string> = {
   daily: '日薪',
   hourly: '時薪',
 };
+
+const PAY_CYCLE_LABELS: Record<'monthly' | 'weekly' | 'daily', string> = {
+  monthly: '月結',
+  weekly: '週結',
+  daily: '日結',
+};
+
+const WEEKDAY_LABELS = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
 
 export default function SettingsScreen() {
   const [view, setView] = useState<'root' | 'hub'>('root');
@@ -105,6 +114,16 @@ const workplaceFormSchema = z
     endDate: z.string().optional(),
     defaultHourlyRate: z.coerce.number().positive().optional(),
     defaultDailyRate: z.coerce.number().positive().optional(),
+
+    // 發薪設定,跟計薪方式(wageType)是兩件獨立的事,不分月薪/日薪/時薪都可以選填
+    payCycle: z.enum(['monthly', 'weekly', 'daily']).nullable().optional(),
+    paydayDayOfMonth: z.coerce.number().int().min(1).max(31).optional(),
+    paydayWeekday: z.coerce.number().int().min(1).max(7).optional(),
+    periodStartDayOfMonth: z.coerce.number().int().min(1).max(31).optional(),
+    periodStartWeekday: z.coerce.number().int().min(1).max(7).optional(),
+    periodEndDayOfMonth: z.coerce.number().int().min(1).max(31).optional(),
+    periodEndIsEndOfMonth: z.boolean().optional(),
+    periodEndWeekday: z.coerce.number().int().min(1).max(7).optional(),
   })
   .refine((values) => values.wageType !== 'monthly' || values.monthlySalary != null, {
     message: '請輸入月薪金額',
@@ -224,6 +243,14 @@ function WorkplaceForm({
           endDate: initial.endDate ?? '',
           defaultHourlyRate: initial.defaultHourlyRate ?? undefined,
           defaultDailyRate: initial.defaultDailyRate ?? undefined,
+          payCycle: (initial.payCycle as 'monthly' | 'weekly' | 'daily' | null) ?? undefined,
+          paydayDayOfMonth: initial.paydayDayOfMonth ?? undefined,
+          paydayWeekday: initial.paydayWeekday ?? undefined,
+          periodStartDayOfMonth: initial.periodStartDayOfMonth ?? undefined,
+          periodStartWeekday: initial.periodStartWeekday ?? undefined,
+          periodEndDayOfMonth: initial.periodEndDayOfMonth ?? undefined,
+          periodEndIsEndOfMonth: initial.periodEndIsEndOfMonth ?? undefined,
+          periodEndWeekday: initial.periodEndWeekday ?? undefined,
         }
       : { name: '', wageType: 'hourly', isCurrentlyEmployed: true },
   });
@@ -407,6 +434,8 @@ function WorkplaceForm({
         </>
       )}
 
+      <PaySettingsSection control={control} />
+
       {onDelete && (
         <Pressable onPress={onDelete}>
           <ThemedView style={[styles.deleteButton, { borderColor: theme.danger }]}>
@@ -416,6 +445,258 @@ function WorkplaceForm({
       )}
     </ScrollView>
   );
+}
+
+function PaySettingsSection({ control }: { control: any }) {
+  const theme = useTheme();
+  const payCycle = useWatch({ control, name: 'payCycle' }) as 'monthly' | 'weekly' | 'daily' | null | undefined;
+  const [expanded, setExpanded] = useState(!!payCycle);
+
+  const paydayDayOfMonth = useWatch({ control, name: 'paydayDayOfMonth' });
+  const paydayWeekday = useWatch({ control, name: 'paydayWeekday' });
+  const periodStartDayOfMonth = useWatch({ control, name: 'periodStartDayOfMonth' });
+  const periodStartWeekday = useWatch({ control, name: 'periodStartWeekday' });
+  const periodEndDayOfMonth = useWatch({ control, name: 'periodEndDayOfMonth' });
+  const periodEndIsEndOfMonth = useWatch({ control, name: 'periodEndIsEndOfMonth' });
+  const periodEndWeekday = useWatch({ control, name: 'periodEndWeekday' });
+
+  const preview = useMemo(() => {
+    if (!payCycle || payCycle === 'daily') return null;
+    if (payCycle === 'monthly' && (paydayDayOfMonth == null || periodStartDayOfMonth == null)) return null;
+    if (payCycle === 'monthly' && !periodEndIsEndOfMonth && periodEndDayOfMonth == null) return null;
+    if (payCycle === 'weekly' && (paydayWeekday == null || periodStartWeekday == null || periodEndWeekday == null))
+      return null;
+
+    const today = new Date();
+    const scanEnd = payCycle === 'monthly' ? addRoughMonths(today, 3) : addRoughDays(today, 21);
+    const entries = resolvePayPeriodsInRange(
+      {
+        payCycle,
+        paydayDayOfMonth,
+        paydayWeekday,
+        periodStartDayOfMonth,
+        periodStartWeekday,
+        periodEndDayOfMonth,
+        periodEndIsEndOfMonth,
+        periodEndWeekday,
+      },
+      today,
+      scanEnd,
+    );
+    const next = entries.find((entry) => entry.paydayDate >= formatDateOnly(today));
+    if (!next) return null;
+    return `下一次發薪日 ${shortDate(next.paydayDate)},對應計薪區間 ${shortDate(next.periodStart)}–${shortDate(next.periodEnd)}`;
+  }, [
+    payCycle,
+    paydayDayOfMonth,
+    paydayWeekday,
+    periodStartDayOfMonth,
+    periodStartWeekday,
+    periodEndDayOfMonth,
+    periodEndIsEndOfMonth,
+    periodEndWeekday,
+  ]);
+
+  return (
+    <ThemedView type="backgroundElement" style={styles.paySection}>
+      <Pressable onPress={() => setExpanded((v) => !v)} style={styles.paySectionHeader}>
+        <ThemedText type="smallBold">發薪設定(選填)</ThemedText>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={theme.textSecondary} />
+      </Pressable>
+
+      {expanded && (
+        <>
+          <ThemedText type="small" themeColor="textSecondary">
+            跟計薪方式是獨立的設定,填了才會出現在統計頁的「發薪日曆」裡。
+          </ThemedText>
+
+          <FieldLabel label="發薪頻率">
+            <Controller
+              control={control}
+              name="payCycle"
+              render={({ field }) => (
+                <ThemedView style={styles.segmentedRow}>
+                  {(['monthly', 'weekly', 'daily'] as const).map((option) => {
+                    const selected = field.value === option;
+                    return (
+                      <Pressable
+                        key={option}
+                        onPress={() => field.onChange(selected ? null : option)}
+                        style={styles.flex1}>
+                        <ThemedView
+                          style={[
+                            styles.segmentedButton,
+                            { backgroundColor: selected ? theme.primary : theme.backgroundElement },
+                          ]}>
+                          <ThemedText style={{ color: selected ? '#ffffff' : theme.text }}>
+                            {PAY_CYCLE_LABELS[option]}
+                          </ThemedText>
+                        </ThemedView>
+                      </Pressable>
+                    );
+                  })}
+                </ThemedView>
+              )}
+            />
+          </FieldLabel>
+
+          {payCycle === 'monthly' && (
+            <>
+              <FieldLabel label="發薪日(每月第幾天)">
+                <Controller
+                  control={control}
+                  name="paydayDayOfMonth"
+                  render={({ field }) => (
+                    <TextInput
+                      value={field.value != null ? String(field.value) : ''}
+                      onChangeText={field.onChange}
+                      keyboardType="numeric"
+                      placeholder="25"
+                      placeholderTextColor={theme.textSecondary}
+                      style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                    />
+                  )}
+                />
+                <ThemedText type="small" themeColor="textSecondary">
+                  若當月沒有這一天,自動視為當月最後一天
+                </ThemedText>
+              </FieldLabel>
+
+              <FieldLabel label="計薪起始日(每月第幾天)">
+                <Controller
+                  control={control}
+                  name="periodStartDayOfMonth"
+                  render={({ field }) => (
+                    <TextInput
+                      value={field.value != null ? String(field.value) : ''}
+                      onChangeText={field.onChange}
+                      keyboardType="numeric"
+                      placeholder="1"
+                      placeholderTextColor={theme.textSecondary}
+                      style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                    />
+                  )}
+                />
+                <ThemedText type="small" themeColor="textSecondary">
+                  若當月沒有這一天,自動視為當月最後一天
+                </ThemedText>
+              </FieldLabel>
+
+              <ThemedView type="backgroundElement" style={styles.switchRow}>
+                <ThemedText>計薪結束日=月底</ThemedText>
+                <Controller
+                  control={control}
+                  name="periodEndIsEndOfMonth"
+                  render={({ field }) => (
+                    <Switch value={field.value ?? false} onValueChange={field.onChange} trackColor={{ true: theme.primary }} />
+                  )}
+                />
+              </ThemedView>
+
+              {!periodEndIsEndOfMonth && (
+                <FieldLabel label="計薪結束日(每月第幾天)">
+                  <Controller
+                    control={control}
+                    name="periodEndDayOfMonth"
+                    render={({ field }) => (
+                      <TextInput
+                        value={field.value != null ? String(field.value) : ''}
+                        onChangeText={field.onChange}
+                        keyboardType="numeric"
+                        placeholder="31"
+                        placeholderTextColor={theme.textSecondary}
+                        style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+                      />
+                    )}
+                  />
+                  <ThemedText type="small" themeColor="textSecondary">
+                    若當月沒有這一天,自動視為當月最後一天
+                  </ThemedText>
+                </FieldLabel>
+              )}
+            </>
+          )}
+
+          {payCycle === 'weekly' && (
+            <>
+              <WeekdayField label="發薪星期" name="paydayWeekday" control={control} />
+              <WeekdayField label="計薪起始星期" name="periodStartWeekday" control={control} />
+              <WeekdayField label="計薪結束星期" name="periodEndWeekday" control={control} />
+            </>
+          )}
+
+          {preview && (
+            <ThemedView style={[styles.previewBox, { backgroundColor: theme.primarySoft }]}>
+              <ThemedText type="small" style={{ color: theme.primary }}>
+                {preview}
+              </ThemedText>
+            </ThemedView>
+          )}
+        </>
+      )}
+    </ThemedView>
+  );
+}
+
+function WeekdayField({
+  label,
+  name,
+  control,
+}: {
+  label: string;
+  name: 'paydayWeekday' | 'periodStartWeekday' | 'periodEndWeekday';
+  control: any;
+}) {
+  const theme = useTheme();
+  return (
+    <FieldLabel label={label}>
+      <Controller
+        control={control}
+        name={name}
+        render={({ field }) => (
+          <ThemedView style={styles.weekdayRow}>
+            {WEEKDAY_LABELS.map((weekdayLabel, index) => {
+              const value = index + 1;
+              const selected = field.value === value;
+              return (
+                <Pressable key={value} onPress={() => field.onChange(value)} style={styles.weekdayChipPressable}>
+                  <ThemedView
+                    style={[
+                      styles.weekdayChip,
+                      { backgroundColor: selected ? theme.primary : theme.backgroundElement },
+                    ]}>
+                    <ThemedText type="small" style={{ color: selected ? '#ffffff' : theme.text }}>
+                      {weekdayLabel}
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
+              );
+            })}
+          </ThemedView>
+        )}
+      />
+    </FieldLabel>
+  );
+}
+
+function formatDateOnly(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function shortDate(dateStr: string): string {
+  const [, month, day] = dateStr.split('-');
+  return `${Number(month)}/${Number(day)}`;
+}
+
+function addRoughMonths(date: Date, months: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + months, date.getDate());
+}
+
+function addRoughDays(date: Date, days: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }
 
 // ---------------------------------------------------------------------------
@@ -1090,6 +1371,32 @@ const styles = StyleSheet.create({
     borderRadius: CardRadius,
     borderWidth: 1.5,
     paddingVertical: Spacing.three,
+    alignItems: 'center',
+  },
+  paySection: {
+    borderRadius: CardRadius,
+    padding: Spacing.four,
+    gap: Spacing.three,
+  },
+  paySectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  previewBox: {
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+  },
+  weekdayChipPressable: {
+    flex: 1,
+  },
+  weekdayChip: {
+    borderRadius: Spacing.two,
+    paddingVertical: Spacing.two,
     alignItems: 'center',
   },
 });

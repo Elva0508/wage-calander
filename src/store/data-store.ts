@@ -4,12 +4,15 @@ import { create } from 'zustand';
 
 import { db } from '@/db/client';
 import {
+  NewReportTemplate,
   NewShift,
   NewShiftType,
   NewWorkplace,
+  ReportTemplate,
   Shift,
   ShiftType,
   Workplace,
+  reportTemplates,
   shiftTypes,
   shifts,
   workplaces,
@@ -19,6 +22,7 @@ interface DataState {
   shifts: Shift[];
   shiftTypes: ShiftType[];
   workplaces: Workplace[];
+  reportTemplates: ReportTemplate[];
   loaded: boolean;
   refresh: () => Promise<void>;
 
@@ -33,20 +37,32 @@ interface DataState {
   addShiftType: (shiftType: NewShiftType) => Promise<void>;
   updateShiftType: (id: number, shiftType: Partial<NewShiftType>) => Promise<void>;
   deleteShiftType: (id: number) => Promise<void>;
+
+  addReportTemplate: (template: NewReportTemplate) => Promise<void>;
+  updateReportTemplate: (id: number, template: Partial<NewReportTemplate>) => Promise<void>;
+  deleteReportTemplate: (id: number) => Promise<void>;
 }
 
 export const useDataStore = create<DataState>((set, get) => ({
   shifts: [],
   shiftTypes: [],
   workplaces: [],
+  reportTemplates: [],
   loaded: false,
   refresh: async () => {
-    const [allShifts, allShiftTypes, allWorkplaces] = await Promise.all([
+    const [allShifts, allShiftTypes, allWorkplaces, allReportTemplates] = await Promise.all([
       db.select().from(shifts),
       db.select().from(shiftTypes),
       db.select().from(workplaces),
+      db.select().from(reportTemplates),
     ]);
-    set({ shifts: allShifts, shiftTypes: allShiftTypes, workplaces: allWorkplaces, loaded: true });
+    set({
+      shifts: allShifts,
+      shiftTypes: allShiftTypes,
+      workplaces: allWorkplaces,
+      reportTemplates: allReportTemplates,
+      loaded: true,
+    });
   },
 
   addShift: async (shift) => {
@@ -96,6 +112,19 @@ export const useDataStore = create<DataState>((set, get) => ({
       return;
     }
     await db.delete(shiftTypes).where(eq(shiftTypes.id, id));
+    await get().refresh();
+  },
+
+  addReportTemplate: async (template) => {
+    await db.insert(reportTemplates).values(template);
+    await get().refresh();
+  },
+  updateReportTemplate: async (id, template) => {
+    await db.update(reportTemplates).set(template).where(eq(reportTemplates.id, id));
+    await get().refresh();
+  },
+  deleteReportTemplate: async (id) => {
+    await db.delete(reportTemplates).where(eq(reportTemplates.id, id));
     await get().refresh();
   },
 }));

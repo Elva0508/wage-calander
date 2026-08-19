@@ -5,7 +5,14 @@
  */
 import assert from 'node:assert/strict';
 
-import { calculateMonthlyWage, calculateShiftHours, calculateShiftWage, WageCalcInput } from '../src/lib/wage';
+import {
+  calculateMonthlyWage,
+  calculateShiftHours,
+  calculateShiftWage,
+  calculateShiftWageBreakdown,
+  isShiftCompleted,
+  WageCalcInput,
+} from '../src/lib/wage';
 
 let passed = 0;
 
@@ -181,6 +188,44 @@ test('calculateMonthlyWage 加總多筆班次', () => {
     { startTime: '09:00', endTime: '13:00', ...noExtraRate },
   ]);
   assert.equal(total, 8 * 180 + 4 * 180);
+});
+
+test('calculateShiftWageBreakdown:一般時段+深夜時段各自拆解,加總等於 total', () => {
+  const input: WageCalcInput = {
+    startTime: '18:00',
+    endTime: '23:00',
+    baseRate: 180,
+    nightRateEnabled: true,
+    nightMultiplier: 1.33,
+    nightStart: '22:00',
+    nightEnd: '06:00',
+    holidayRateEnabled: false,
+  };
+  const breakdown = calculateShiftWageBreakdown(input);
+  assert.equal(breakdown.total, calculateShiftWage(input));
+  assert.equal(breakdown.regularPay + breakdown.nightPay, breakdown.total);
+  assert.ok(breakdown.nightPay > 0);
+});
+
+test('calculateShiftWageBreakdown:全日班次沒有分項,regularPay/nightPay 都是 0', () => {
+  const breakdown = calculateShiftWageBreakdown({ isFullDay: true, dailyAmount: 1600 });
+  assert.deepEqual(breakdown, { total: 1600, regularPay: 0, nightPay: 0 });
+});
+
+test('calculateShiftWageBreakdown:manualWageOverride 短路,沒有分項', () => {
+  const breakdown = calculateShiftWageBreakdown({
+    startTime: '09:00',
+    endTime: '17:00',
+    ...noExtraRate,
+    manualWageOverride: 999,
+  });
+  assert.deepEqual(breakdown, { total: 999, regularPay: 0, nightPay: 0 });
+});
+
+test('isShiftCompleted:日期 <= 今天算已完成', () => {
+  assert.equal(isShiftCompleted('2026-08-18', '2026-08-19'), true);
+  assert.equal(isShiftCompleted('2026-08-19', '2026-08-19'), true);
+  assert.equal(isShiftCompleted('2026-08-20', '2026-08-19'), false);
 });
 
 console.log(`\n${passed} 個測試全部通過`);

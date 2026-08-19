@@ -103,3 +103,57 @@ export function calculateShiftWage(input: WageCalcInput): number {
 export function calculateMonthlyWage(entries: WageCalcInput[]): number {
   return entries.reduce((total, entry) => total + calculateShiftWage(entry), 0);
 }
+
+export type WageBreakdown = {
+  total: number;
+  regularPay: number;
+  nightPay: number;
+};
+
+/**
+ * 給逐日明細「展開看拆解」用。全日班次/手動覆寫的情況沒有分項可拆,regularPay/nightPay 固定 0,
+ * total 直接等於最終金額——不假裝拆解出不存在的分項。
+ */
+export function calculateShiftWageBreakdown(input: WageCalcInput): WageBreakdown {
+  const total = calculateShiftWage(input);
+
+  if (input.manualWageOverride != null || input.isFullDay) {
+    return { total, regularPay: 0, nightPay: 0 };
+  }
+
+  const shiftStart = toMinutes(input.startTime);
+  let shiftEnd = toMinutes(input.endTime);
+  if (shiftEnd <= shiftStart) shiftEnd += 24 * 60;
+
+  const grossMinutes = shiftEnd - shiftStart;
+  const unpaidBreakMinutes = !input.breakPaid && input.breakMinutes ? input.breakMinutes : 0;
+
+  let nightMinutes = 0;
+  if (input.nightRateEnabled && input.nightStart && input.nightEnd && input.nightMultiplier) {
+    const nightStart = toMinutes(input.nightStart);
+    let nightEnd = toMinutes(input.nightEnd);
+    if (nightEnd <= nightStart) nightEnd += 24 * 60;
+
+    for (const offset of [-24 * 60, 0, 24 * 60]) {
+      nightMinutes += overlapMinutes(shiftStart, shiftEnd, nightStart + offset, nightEnd + offset);
+    }
+  }
+
+  const regularMinutesGross = grossMinutes - nightMinutes;
+  const regularMinutes = Math.max(0, regularMinutesGross - unpaidBreakMinutes);
+  const overflowIntoNight = Math.max(0, unpaidBreakMinutes - regularMinutesGross);
+  const paidNightMinutes = Math.max(0, nightMinutes - overflowIntoNight);
+
+  const holidayMultiplier =
+    input.holidayRateEnabled && input.isHoliday && input.holidayPercent ? 1 + input.holidayPercent / 100 : 1;
+
+  const regularPay = Math.round((regularMinutes / 60) * input.baseRate * holidayMultiplier);
+  const nightPay = Math.round((paidNightMinutes / 60) * input.baseRate * (input.nightMultiplier ?? 1) * holidayMultiplier);
+
+  return { total, regularPay, nightPay };
+}
+
+/** 單純比較日期字串,今日統計/發薪日曆的「已完成/預估」判斷共用同一個函式。 */
+export function isShiftCompleted(dateStr: string, today: string): boolean {
+  return dateStr <= today;
+}
