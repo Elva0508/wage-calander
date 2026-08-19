@@ -1,3 +1,5 @@
+import { differenceInCalendarDays, eachMonthOfInterval, endOfMonth, getDaysInMonth, startOfMonth } from 'date-fns';
+
 export type ShiftTimeRange = {
   startTime: string;
   endTime: string;
@@ -156,4 +158,33 @@ export function calculateShiftWageBreakdown(input: WageCalcInput): WageBreakdown
 /** 單純比較日期字串,今日統計/發薪日曆的「已完成/預估」判斷共用同一個函式。 */
 export function isShiftCompleted(dateStr: string, today: string): boolean {
   return dateStr <= today;
+}
+
+/** 跟 hours-report-view.tsx 的 parseISODateInput 用同一套時區安全慣例:用本地午夜組 Date */
+function parseDateStrLocal(dateStr: string): Date {
+  return new Date(`${dateStr}T00:00:00`);
+}
+
+/**
+ * 月薪工作沒有「逐班計薪」概念,但工時統計/逐日明細仍需要在指定區間內攤出對應的月薪金額,
+ * 不然月薪工作永遠顯示 $0 收入,沒有參考價值。做法:區間覆蓋到的每個日曆月,各自算
+ * 「重疊天數 / 該月總天數 * 月薪」,加總後只在最後 round 一次(比照 calculateShiftWage
+ * 只在最後捨入一次的慣例,避免多月加總分次捨入產生誤差)。
+ * rangeStart/rangeEnd 皆為 'yyyy-MM-dd' 且為 inclusive 邊界。
+ */
+export function calculateProratedMonthlySalary(monthlySalary: number, rangeStart: string, rangeEnd: string): number {
+  const start = parseDateStrLocal(rangeStart);
+  const end = parseDateStrLocal(rangeEnd);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
+
+  let total = 0;
+  for (const monthAnchor of eachMonthOfInterval({ start, end })) {
+    const monthStart = startOfMonth(monthAnchor);
+    const monthEnd = endOfMonth(monthAnchor);
+    const overlapStart = monthStart > start ? monthStart : start;
+    const overlapEnd = monthEnd < end ? monthEnd : end;
+    const overlapDays = differenceInCalendarDays(overlapEnd, overlapStart) + 1;
+    total += (overlapDays / getDaysInMonth(monthStart)) * monthlySalary;
+  }
+  return Math.round(total);
 }

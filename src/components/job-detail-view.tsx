@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CardRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { calculateShiftHours, calculateShiftWageBreakdown, isShiftCompleted } from '@/lib/wage';
+import { calculateProratedMonthlySalary, calculateShiftHours, calculateShiftWageBreakdown, isShiftCompleted } from '@/lib/wage';
 import { resolveShiftWageInput, resolveShiftWorkplaceId } from '@/lib/resolve-shift-wage-input';
 import { useDataStore } from '@/store/data-store';
 import { UNASSIGNED_KEY } from '@/components/hours-report-view';
@@ -70,7 +70,7 @@ export function JobDetailView({
   }, [shifts, shiftTypesById, workplacesById, rangeStart, rangeEnd, workplaceKey, today, workplace?.wageType]);
 
   const summary = useMemo(() => {
-    return rows.reduce(
+    const acc = rows.reduce(
       (acc, row) => {
         const bucket = row.completed ? acc.completed : acc.pending;
         bucket.hours += row.hours;
@@ -79,7 +79,12 @@ export function JobDetailView({
       },
       { completed: { hours: 0, pay: 0 }, pending: { hours: 0, pay: 0 } },
     );
-  }, [rows]);
+    // 月薪工作不逐班計薪,逐日列表每一列仍顯示 $0,只有這裡的彙總卡片需要攤入月薪
+    if (workplace?.wageType === 'monthly' && rows.length > 0) {
+      acc.completed.pay += calculateProratedMonthlySalary(workplace.monthlySalary ?? 0, rangeStart, rangeEnd);
+    }
+    return acc;
+  }, [rows, workplace, rangeStart, rangeEnd]);
 
   const visibleRows = showAll ? rows : rows.slice(0, TRUNCATE_AT);
 

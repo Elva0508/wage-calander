@@ -21,7 +21,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CardRadius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { calculateShiftHours, calculateShiftWage, isShiftCompleted } from '@/lib/wage';
+import { calculateProratedMonthlySalary, calculateShiftHours, calculateShiftWage, isShiftCompleted } from '@/lib/wage';
 import { resolveShiftWageInput, resolveShiftWorkplaceId } from '@/lib/resolve-shift-wage-input';
 import { useDataStore } from '@/store/data-store';
 
@@ -194,6 +194,16 @@ export function HoursReportView() {
       entryBucket.hours += hours;
       entryBucket.pay += pay;
       byWorkplace.set(workplaceId, entry);
+    }
+
+    // 月薪工作不逐班計薪(resolveShiftWageInput 對它一律回傳 null),上面迴圈算出來的 pay 永遠是 0,
+    // 這裡另外把 Workplace.monthlySalary 依重疊天數攤進選定範圍,只攤一次、只算進截至今日
+    for (const [workplaceId, entry] of byWorkplace) {
+      if (entry.wageType !== 'monthly') continue;
+      const workplace = workplacesById.get(workplaceId);
+      const prorated = calculateProratedMonthlySalary(workplace?.monthlySalary ?? 0, rangeStartStr, rangeEndStr);
+      entry.completed.pay += prorated;
+      completed.pay += prorated;
     }
 
     return {

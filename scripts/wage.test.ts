@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 
 import {
   calculateMonthlyWage,
+  calculateProratedMonthlySalary,
   calculateShiftHours,
   calculateShiftWage,
   calculateShiftWageBreakdown,
@@ -226,6 +227,25 @@ test('isShiftCompleted:日期 <= 今天算已完成', () => {
   assert.equal(isShiftCompleted('2026-08-18', '2026-08-19'), true);
   assert.equal(isShiftCompleted('2026-08-19', '2026-08-19'), true);
   assert.equal(isShiftCompleted('2026-08-20', '2026-08-19'), false);
+});
+
+test('calculateProratedMonthlySalary:選定範圍剛好是完整一個日曆月 → 等於完整月薪', () => {
+  assert.equal(calculateProratedMonthlySalary(31000, '2026-08-01', '2026-08-31'), 31000);
+});
+
+test('calculateProratedMonthlySalary:選定範圍是月中一週 → 月薪 x (7/當月天數)', () => {
+  const result = calculateProratedMonthlySalary(31000, '2026-08-03', '2026-08-09');
+  assert.equal(result, Math.round((7 / 31) * 31000));
+});
+
+test('calculateProratedMonthlySalary:選定範圍跨兩個月 → 兩段重疊比例加總後只 round 一次', () => {
+  const result = calculateProratedMonthlySalary(30000, '2026-08-25', '2026-09-05');
+  const expected = Math.round((7 / 31) * 30000 + (5 / 30) * 30000);
+  assert.equal(result, expected);
+});
+
+test('calculateProratedMonthlySalary:結束日期早於起始日期 → 回傳 0', () => {
+  assert.equal(calculateProratedMonthlySalary(30000, '2026-08-10', '2026-08-05'), 0);
 });
 
 console.log(`\n${passed} 個測試全部通過`);
