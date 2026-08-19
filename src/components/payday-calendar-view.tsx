@@ -3,6 +3,7 @@ import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet } from 'react-native';
 
+import { JobDetailView } from '@/components/job-detail-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { CardRadius, Spacing } from '@/constants/theme';
@@ -14,11 +15,14 @@ import { useDataStore } from '@/store/data-store';
 
 type PaydayRow = {
   key: string;
+  workplaceId: number;
   workplaceName: string;
   paydayLabel: string;
   periodLabel: string | null;
   amount: number;
   completed: boolean;
+  detailRangeStart: string;
+  detailRangeEnd: string;
 };
 
 export function PaydayCalendarView() {
@@ -27,6 +31,9 @@ export function PaydayCalendarView() {
   const shiftTypes = useDataStore((state) => state.shiftTypes);
   const workplaces = useDataStore((state) => state.workplaces);
   const [anchor, setAnchor] = useState(new Date());
+  const [openDetail, setOpenDetail] = useState<{ workplaceId: number; rangeStart: string; rangeEnd: string } | null>(
+    null,
+  );
 
   const shiftTypesById = useMemo(() => new Map(shiftTypes.map((st) => [st.id, st])), [shiftTypes]);
   const workplacesById = useMemo(() => new Map(workplaces.map((w) => [w.id, w])), [workplaces]);
@@ -71,11 +78,14 @@ export function PaydayCalendarView() {
         const allCompleted = dayShifts.every((s) => isShiftCompleted(s.date, today));
         result.push({
           key: `daily-${workplace.id}`,
+          workplaceId: workplace.id,
           workplaceName: workplace.name,
           paydayLabel: '日結彙總',
           periodLabel: `本月共 ${dayShifts.length} 個班次`,
           amount,
           completed: allCompleted,
+          detailRangeStart: format(rangeStart, 'yyyy-MM-dd'),
+          detailRangeEnd: format(rangeEnd, 'yyyy-MM-dd'),
         });
         continue;
       }
@@ -88,11 +98,14 @@ export function PaydayCalendarView() {
             : payForPeriod(workplace.id, entry.periodStart, entry.periodEnd);
         result.push({
           key: `${workplace.id}-${entry.paydayDate}`,
+          workplaceId: workplace.id,
           workplaceName: workplace.name,
           paydayLabel: `發薪日 ${shortDate(entry.paydayDate)}`,
           periodLabel: `計薪區間 ${shortDate(entry.periodStart)}–${shortDate(entry.periodEnd)}`,
           amount,
           completed: isShiftCompleted(entry.paydayDate, today),
+          detailRangeStart: entry.periodStart,
+          detailRangeEnd: entry.periodEnd,
         });
       }
     }
@@ -109,6 +122,17 @@ export function PaydayCalendarView() {
     },
     { confirmed: 0, pending: 0 },
   );
+
+  if (openDetail) {
+    return (
+      <JobDetailView
+        workplaceKey={openDetail.workplaceId}
+        rangeStart={openDetail.rangeStart}
+        rangeEnd={openDetail.rangeEnd}
+        onBack={() => setOpenDetail(null)}
+      />
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -134,23 +158,33 @@ export function PaydayCalendarView() {
         <ThemedText themeColor="textSecondary">這個月還沒有任何發薪紀錄。</ThemedText>
       ) : (
         rows.map((row) => (
-          <ThemedView key={row.key} type="backgroundElement" style={styles.card}>
-            <ThemedView type="backgroundElement" style={styles.cardHeader}>
-              <ThemedText type="smallBold">{row.workplaceName}</ThemedText>
-              <ThemedText style={{ color: row.completed ? theme.primary : theme.accent }}>
-                ${row.amount.toLocaleString()}
-              </ThemedText>
-            </ThemedView>
-            <ThemedText type="small" themeColor="textSecondary">
-              {row.paydayLabel}
-              {row.periodLabel ? ` · ${row.periodLabel}` : ''}
-            </ThemedText>
-            {!row.completed && (
+          <Pressable
+            key={row.key}
+            onPress={() =>
+              setOpenDetail({
+                workplaceId: row.workplaceId,
+                rangeStart: row.detailRangeStart,
+                rangeEnd: row.detailRangeEnd,
+              })
+            }>
+            <ThemedView type="backgroundElement" style={styles.card}>
+              <ThemedView type="backgroundElement" style={styles.cardHeader}>
+                <ThemedText type="smallBold">{row.workplaceName}</ThemedText>
+                <ThemedText style={{ color: row.completed ? theme.primary : theme.accent }}>
+                  ${row.amount.toLocaleString()}
+                </ThemedText>
+              </ThemedView>
               <ThemedText type="small" themeColor="textSecondary">
-                預估,尚未確定入帳
+                {row.paydayLabel}
+                {row.periodLabel ? ` · ${row.periodLabel}` : ''}
               </ThemedText>
-            )}
-          </ThemedView>
+              {!row.completed && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  預估,尚未確定入帳
+                </ThemedText>
+              )}
+            </ThemedView>
+          </Pressable>
         ))
       )}
 

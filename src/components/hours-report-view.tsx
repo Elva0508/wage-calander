@@ -120,7 +120,6 @@ export function HoursReportView() {
   const rangeStartStr = format(rangeStart, 'yyyy-MM-dd');
   const rangeEndStr = format(rangeEnd, 'yyyy-MM-dd');
   const today = todayStr();
-  const hasFutureExtent = rangeEndStr > today;
 
   function applyTemplate(id: 'default' | number) {
     setActiveTemplateId(id);
@@ -370,16 +369,6 @@ export function HoursReportView() {
               color={theme.primary}
               background={theme.primarySoft}
             />
-            {hasFutureExtent && (
-              <SummaryCard
-                label="未來"
-                hours={report.future.hours}
-                pay={report.future.pay}
-                days={report.future.days}
-                color={theme.accent}
-                background={theme.accentSoft}
-              />
-            )}
           </ThemedView>
         </>
       ) : (
