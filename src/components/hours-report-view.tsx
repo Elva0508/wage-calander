@@ -41,6 +41,13 @@ function todayStr() {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
+/** 自訂範圍的輸入框允許使用者一個字一個字打,打到一半(甚至打錯)都不能讓整頁噴錯 */
+function parseISODateInput(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function computeRange(
   rangeType: RangeType,
   anchor: Date,
@@ -56,8 +63,8 @@ function computeRange(
     case 'year':
       return { start: startOfYear(anchor), end: endOfYear(anchor), label: format(anchor, 'yyyy 年') };
     case 'custom': {
-      const start = customRange.start ? new Date(customRange.start) : startOfMonth(anchor);
-      const end = customRange.end ? new Date(customRange.end) : endOfMonth(anchor);
+      const start = parseISODateInput(customRange.start) ?? startOfMonth(anchor);
+      const end = parseISODateInput(customRange.end) ?? endOfMonth(anchor);
       return { start, end, label: `${customRange.start || '未選'} ~ ${customRange.end || '未選'}` };
     }
     case 'month':
@@ -81,6 +88,7 @@ function shiftAnchor(rangeType: RangeType, anchor: Date, direction: 1 | -1): Dat
 }
 
 type Totals = { hours: number; pay: number };
+type BucketTotals = Totals & { days: number };
 
 export function HoursReportView() {
   const theme = useTheme();
@@ -145,9 +153,10 @@ export function HoursReportView() {
     const rangeShifts = shifts.filter((s) => s.date >= rangeStartStr && s.date <= rangeEndStr);
 
     const completed: Totals = { hours: 0, pay: 0 };
-    const pending: Totals = { hours: 0, pay: 0 };
+    const future: Totals = { hours: 0, pay: 0 };
+    const completedDays = new Set<string>();
+    const futureDays = new Set<string>();
     const byWorkplace = new Map<number, { name: string; wageType: string | null; completed: Totals; pending: Totals }>();
-    let attendanceDays = new Set<string>();
 
     for (const shift of rangeShifts) {
       const workplaceId = resolveShiftWorkplaceId(shift, shiftTypesById) ?? UNASSIGNED_KEY;
@@ -167,12 +176,14 @@ export function HoursReportView() {
             )
           : 0;
       const pay = wageInput ? calculateShiftWage(wageInput) : 0;
-      if (hours > 0 || pay > 0 || shift.isRestDay === false) attendanceDays.add(shift.date);
+      const isAttendanceDay = hours > 0 || pay > 0 || shift.isRestDay === false;
 
-      // 月薪工作不參與已完成/預估拆分,金額固定算在已完成——月薪本身不會因為還沒到月底就變得不確定
-      const completedBucket = isMonthly || isShiftCompleted(shift.date, today) ? completed : pending;
-      completedBucket.hours += hours;
-      completedBucket.pay += pay;
+      // 月薪工作不參與截至今日/未來拆分,金額固定算在截至今日——月薪本身不會因為還沒到月底就變得不確定
+      const isCompletedBucket = isMonthly || isShiftCompleted(shift.date, today);
+      const bucket = isCompletedBucket ? completed : future;
+      bucket.hours += hours;
+      bucket.pay += pay;
+      if (isAttendanceDay) (isCompletedBucket ? completedDays : futureDays).add(shift.date);
 
       const entry = byWorkplace.get(workplaceId) ?? {
         name: workplaceId === UNASSIGNED_KEY ? '未指定' : workplace?.name ?? '未知工作地點',
@@ -180,16 +191,16 @@ export function HoursReportView() {
         completed: { hours: 0, pay: 0 },
         pending: { hours: 0, pay: 0 },
       };
-      const entryBucket = isMonthly || isShiftCompleted(shift.date, today) ? entry.completed : entry.pending;
+      const entryBucket = isCompletedBucket ? entry.completed : entry.pending;
       entryBucket.hours += hours;
       entryBucket.pay += pay;
       byWorkplace.set(workplaceId, entry);
     }
 
     return {
-      completed,
-      pending,
-      attendanceDayCount: attendanceDays.size,
+      completed: { ...completed, days: completedDays.size } as BucketTotals,
+      future: { ...future, days: futureDays.size } as BucketTotals,
+      totalPay: completed.pay + future.pay,
       byWorkplace: Array.from(byWorkplace.entries()).map(([key, value]) => ({ key, ...value })),
     };
   }, [shifts, shiftTypesById, workplacesById, rangeStartStr, rangeEndStr, workplaceIds, today]);
@@ -337,35 +348,47 @@ export function HoursReportView() {
         ))}
       </ThemedView>
 
-      <ThemedText type="small" themeColor="textSecondary">
-        已排定 {report.attendanceDayCount} 天
-      </ThemedText>
-
       {showSplit ? (
-        <ThemedView style={styles.bigCardRow}>
-          <SummaryCard
-            label="已完成"
-            hours={report.completed.hours}
-            pay={report.completed.pay}
-            color={theme.primary}
-            background={theme.primarySoft}
-          />
-          {hasFutureExtent && (
+        <>
+          <ThemedView style={[styles.totalCard, { backgroundColor: theme.primarySoft }]}>
+            <ThemedText type="small" themeColor="textSecondary">
+              未來總計
+            </ThemedText>
+            <ThemedText type="title" style={[styles.bigNumber, { color: theme.primary }]}>
+              ${report.totalPay.toLocaleString()}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              這個日期區間總共可以領到多少
+            </ThemedText>
+          </ThemedView>
+          <ThemedView style={styles.bigCardRow}>
             <SummaryCard
-              label="預估"
-              hours={report.pending.hours}
-              pay={report.pending.pay}
-              color={theme.accent}
-              background={theme.accentSoft}
+              label="截至今日"
+              hours={report.completed.hours}
+              pay={report.completed.pay}
+              days={report.completed.days}
+              color={theme.primary}
+              background={theme.primarySoft}
             />
-          )}
-        </ThemedView>
+            {hasFutureExtent && (
+              <SummaryCard
+                label="未來"
+                hours={report.future.hours}
+                pay={report.future.pay}
+                days={report.future.days}
+                color={theme.accent}
+                background={theme.accentSoft}
+              />
+            )}
+          </ThemedView>
+        </>
       ) : (
         <ThemedView style={styles.bigCardRow}>
           <SummaryCard
             label="總計"
-            hours={report.completed.hours + report.pending.hours}
-            pay={report.completed.pay + report.pending.pay}
+            hours={report.completed.hours + report.future.hours}
+            pay={report.totalPay}
+            days={report.completed.days + report.future.days}
             color={theme.primary}
             background={theme.primarySoft}
           />
@@ -403,12 +426,14 @@ function SummaryCard({
   label,
   hours,
   pay,
+  days,
   color,
   background,
 }: {
   label: string;
   hours: number;
   pay: number;
+  days: number;
   color: string;
   background: string;
 }) {
@@ -421,7 +446,7 @@ function SummaryCard({
         ${pay.toLocaleString()}
       </ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
-        {hours.toFixed(1)} 小時
+        {hours.toFixed(1)} 小時 · {days} 天
       </ThemedText>
     </ThemedView>
   );
@@ -509,6 +534,11 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  totalCard: {
+    borderRadius: CardRadius,
+    padding: Spacing.four,
+    gap: 2,
   },
   bigCardRow: {
     flexDirection: 'row',

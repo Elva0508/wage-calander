@@ -36,7 +36,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="wage"
         options={{
-          title: '薪資',
+          title: '統計',
           tabBarIcon: ({ color, size }) => <Ionicons name="cash-outline" size={size} color={color} />,
         }}
       />

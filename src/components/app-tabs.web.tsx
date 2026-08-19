@@ -18,7 +18,7 @@ import { useUiStore } from '@/store/ui-store';
 
 const TABS = [
   { name: 'index', href: '/', label: '今日', icon: 'calendar-outline' },
-  { name: 'wage', href: '/wage', label: '薪資', icon: 'cash-outline' },
+  { name: 'wage', href: '/wage', label: '統計', icon: 'cash-outline' },
   { name: 'settings', href: '/settings', label: '設定', icon: 'settings-outline' },
 ] as const;
 
