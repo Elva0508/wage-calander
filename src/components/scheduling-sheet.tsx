@@ -221,20 +221,14 @@ export function SchedulingSheet() {
   return (
     <ThemedView style={[styles.sheet, { borderColor: theme.border }]}>
       <ThemedView style={styles.headerRow}>
-        <ThemedView style={styles.headerLeft}>
-          <ThemedText type="smallBold">排班中</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
+        <Pressable onPress={exitSchedulingMode} hitSlop={12}>
+          <ThemedText style={{ color: theme.primary }}>退出</ThemedText>
+        </Pressable>
+        <ThemedView style={[styles.pillDate, { backgroundColor: theme.primarySoft, borderColor: theme.border }]}>
+          <ThemedText type="small" style={{ color: theme.primary }}>
             目前排到 {schedulingDate}
           </ThemedText>
         </ThemedView>
-        <Pressable onPress={exitSchedulingMode}>
-          <ThemedView style={[styles.exitButton, { borderColor: theme.border }]}>
-            <Ionicons name="close" size={16} color={theme.textSecondary} />
-            <ThemedText type="small" themeColor="textSecondary">
-              退出
-            </ThemedText>
-          </ThemedView>
-        </Pressable>
       </ThemedView>
 
       <ScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
@@ -714,14 +708,8 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
     paddingBottom: Spacing.two,
   },
-  headerLeft: {
-    gap: 2,
-  },
-  exitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    borderWidth: 1,
+  pillDate: {
+    borderWidth: 0.5,
     borderRadius: Spacing.five,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,

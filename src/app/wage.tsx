@@ -19,7 +19,7 @@ export default function WageScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.header}>
           <ThemedText type="subtitle">統計</ThemedText>
-          <ThemedView style={styles.modeRow}>
+          <ThemedView type="backgroundElement" style={styles.modeRow}>
             <ModeButton label="工時統計" active={viewMode === 'hours'} onPress={() => setViewMode('hours')} />
             <ModeButton label="發薪日曆" active={viewMode === 'payday'} onPress={() => setViewMode('payday')} />
           </ThemedView>
@@ -37,8 +37,8 @@ function ModeButton({ label, active, onPress }: { label: string; active: boolean
   const theme = useTheme();
   return (
     <Pressable onPress={onPress} style={styles.modeButtonPressable}>
-      <ThemedView type={active ? 'backgroundSelected' : 'backgroundElement'} style={styles.modeButton}>
-        <ThemedText themeColor={active ? 'text' : 'textSecondary'} style={active ? { color: theme.primary } : undefined}>
+      <ThemedView style={[styles.modeButton, { backgroundColor: active ? theme.primary : 'transparent' }]}>
+        <ThemedText style={{ color: active ? theme.onPrimary : theme.textSecondary, fontWeight: active ? '500' : '400' }}>
           {label}
         </ThemedText>
       </ThemedView>
@@ -63,7 +63,8 @@ const styles = StyleSheet.create({
   },
   modeRow: {
     flexDirection: 'row',
-    gap: Spacing.two,
+    borderRadius: Spacing.five,
+    padding: 3,
   },
   modeButtonPressable: {
     flex: 1,

@@ -358,96 +358,64 @@ export function HoursReportView() {
       </ThemedView>
 
       {showSplit ? (
-        <>
-          <ThemedView style={[styles.totalCard, { backgroundColor: theme.primarySoft }]}>
-            <ThemedText type="small" themeColor="textSecondary">
-              未來總計
-            </ThemedText>
-            <ThemedText type="title" style={[styles.bigNumber, { color: theme.primary }]}>
-              ${report.totalPay.toLocaleString()}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              這個日期區間總共可以領到多少
-            </ThemedText>
-          </ThemedView>
-          <ThemedView style={styles.bigCardRow}>
-            <SummaryCard
-              label="截至今日"
-              hours={report.completed.hours}
-              pay={report.completed.pay}
-              days={report.completed.days}
-              color={theme.primary}
-              background={theme.primarySoft}
-            />
-          </ThemedView>
-        </>
+        <ThemedView type="backgroundElement" style={styles.sumCard}>
+          <ThemedText type="small" themeColor="textSecondary">
+            {rangeLabel} · 已完成收入
+          </ThemedText>
+          <ThemedText type="title" style={styles.bigNumber}>
+            ${report.completed.pay.toLocaleString()}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            工時 {report.completed.hours.toFixed(1)}h　出勤 {report.completed.days} 天　未來總計 $
+            {report.totalPay.toLocaleString()}
+          </ThemedText>
+        </ThemedView>
       ) : (
-        <ThemedView style={styles.bigCardRow}>
-          <SummaryCard
-            label="總計"
-            hours={report.completed.hours + report.future.hours}
-            pay={report.totalPay}
-            days={report.completed.days + report.future.days}
-            color={theme.primary}
-            background={theme.primarySoft}
-          />
+        <ThemedView type="backgroundElement" style={styles.sumCard}>
+          <ThemedText type="small" themeColor="textSecondary">
+            {rangeLabel} · 總計
+          </ThemedText>
+          <ThemedText type="title" style={styles.bigNumber}>
+            ${report.totalPay.toLocaleString()}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            工時 {(report.completed.hours + report.future.hours).toFixed(1)}h　出勤{' '}
+            {report.completed.days + report.future.days} 天
+          </ThemedText>
         </ThemedView>
       )}
 
       {showBreakdown && (
         <>
-          <ThemedText type="smallBold">依工作拆算</ThemedText>
+          <ThemedText type="smallBold">各工作明細</ThemedText>
           {report.byWorkplace.length === 0 ? (
             <ThemedText themeColor="textSecondary">這段範圍內還沒有任何排班紀錄。</ThemedText>
           ) : (
-            report.byWorkplace.map(({ key, name, completed: c, pending: p }) => (
-              <Pressable key={key} onPress={() => setOpenJobKey(key)}>
-                <ThemedView type="backgroundElement" style={styles.jobCard}>
-                  <ThemedView type="backgroundElement" style={styles.jobCardHeader}>
-                    <ThemedText type="smallBold">{name}</ThemedText>
-                    <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+            report.byWorkplace.map(({ key, name, wageType, completed: c, pending: p }) => {
+              const totalHours = c.hours + p.hours;
+              const totalPay = c.pay + p.pay;
+              const isMonthly = wageType === 'monthly';
+              return (
+                <Pressable key={key} onPress={() => setOpenJobKey(key)}>
+                  <ThemedView type="backgroundElement" style={styles.jobRow}>
+                    <ThemedView type="backgroundElement" style={styles.jobRowLeft}>
+                      <ThemedText type="smallBold">{name}</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        工時 {totalHours.toFixed(1)}h{p.pay > 0 ? ` · 待入帳 $${p.pay.toLocaleString()}` : ''}
+                      </ThemedText>
+                    </ThemedView>
+                    <ThemedView type="backgroundElement" style={styles.jobRowRight}>
+                      <ThemedText type="smallBold">{isMonthly ? '月薪' : `$${totalPay.toLocaleString()}`}</ThemedText>
+                      <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+                    </ThemedView>
                   </ThemedView>
-                  <ThemedView type="backgroundElement" style={styles.jobCardRow}>
-                    <ThemedText themeColor="textSecondary">{(c.hours + p.hours).toFixed(1)} 小時</ThemedText>
-                    <ThemedText style={{ color: theme.primary }}>${(c.pay + p.pay).toLocaleString()}</ThemedText>
-                  </ThemedView>
-                </ThemedView>
-              </Pressable>
-            ))
+                </Pressable>
+              );
+            })
           )}
         </>
       )}
     </ScrollView>
-  );
-}
-
-function SummaryCard({
-  label,
-  hours,
-  pay,
-  days,
-  color,
-  background,
-}: {
-  label: string;
-  hours: number;
-  pay: number;
-  days: number;
-  color: string;
-  background: string;
-}) {
-  return (
-    <ThemedView style={[styles.bigCard, { backgroundColor: background }]}>
-      <ThemedText type="small" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-      <ThemedText type="title" style={[styles.bigNumber, { color }]}>
-        ${pay.toLocaleString()}
-      </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {hours.toFixed(1)} 小時 · {days} 天
-      </ThemedText>
-    </ThemedView>
   );
 }
 
@@ -535,37 +503,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
-  totalCard: {
-    borderRadius: CardRadius,
-    padding: Spacing.four,
-    gap: 2,
-  },
-  bigCardRow: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-  },
-  bigCard: {
-    flex: 1,
+  sumCard: {
     borderRadius: CardRadius,
     padding: Spacing.four,
     gap: 2,
   },
   bigNumber: {
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 26,
+    lineHeight: 32,
   },
-  jobCard: {
-    borderRadius: CardRadius,
-    padding: Spacing.four,
-    gap: Spacing.one,
-  },
-  jobCardHeader: {
+  jobRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderRadius: CardRadius,
+    padding: Spacing.three,
   },
-  jobCardRow: {
+  jobRowLeft: {
+    gap: 2,
+  },
+  jobRowRight: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Spacing.one,
   },
 });
