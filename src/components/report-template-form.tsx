@@ -77,7 +77,7 @@ export function ReportTemplateForm({
             <Pressable key={option} onPress={() => setRangeType(option)}>
               <ThemedView
                 style={[styles.chip, { backgroundColor: rangeType === option ? theme.primary : theme.backgroundElement }]}>
-                <ThemedText type="small" style={{ color: rangeType === option ? '#ffffff' : theme.text }}>
+                <ThemedText type="small" style={{ color: rangeType === option ? theme.onPrimary : theme.text }}>
                   {RANGE_TYPE_LABELS[option]}
                 </ThemedText>
               </ThemedView>
@@ -93,7 +93,7 @@ export function ReportTemplateForm({
         <ThemedView style={styles.chipRow}>
           <Pressable onPress={() => setWorkplaceIds(null)}>
             <ThemedView style={[styles.chip, { backgroundColor: workplaceIds == null ? theme.primary : theme.backgroundElement }]}>
-              <ThemedText type="small" style={{ color: workplaceIds == null ? '#ffffff' : theme.text }}>
+              <ThemedText type="small" style={{ color: workplaceIds == null ? theme.onPrimary : theme.text }}>
                 全部工作
               </ThemedText>
             </ThemedView>
@@ -110,7 +110,7 @@ export function ReportTemplateForm({
                   })
                 }>
                 <ThemedView style={[styles.chip, { backgroundColor: active ? theme.primary : theme.backgroundElement }]}>
-                  <ThemedText type="small" style={{ color: active ? '#ffffff' : theme.text }}>
+                  <ThemedText type="small" style={{ color: active ? theme.onPrimary : theme.text }}>
                     {wp.name}
                   </ThemedText>
                 </ThemedView>

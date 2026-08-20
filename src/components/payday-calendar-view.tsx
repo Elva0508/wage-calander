@@ -147,8 +147,8 @@ export function PaydayCalendarView() {
       </ThemedView>
 
       {unconfigured.length > 0 && (
-        <ThemedView style={[styles.hintBox, { backgroundColor: theme.accentSoft }]}>
-          <ThemedText type="small" style={{ color: theme.accent }}>
+        <ThemedView style={[styles.hintBox, { backgroundColor: theme.warningSoft, borderLeftColor: theme.warning }]}>
+          <ThemedText type="small" style={{ color: theme.warningText }}>
             {unconfigured.join('、')} 還沒設定發薪日,請去「設定」補上才會出現在這裡
           </ThemedText>
         </ThemedView>
@@ -223,6 +223,7 @@ const styles = StyleSheet.create({
   hintBox: {
     borderRadius: Spacing.three,
     padding: Spacing.three,
+    borderLeftWidth: 3,
   },
   card: {
     borderRadius: CardRadius,

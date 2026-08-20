@@ -299,7 +299,7 @@ export function SchedulingSheet() {
                       styles.chip,
                       { backgroundColor: manualForm.workplaceId == null ? theme.primary : theme.backgroundElement },
                     ]}>
-                    <ThemedText style={{ color: manualForm.workplaceId == null ? '#ffffff' : theme.text }}>
+                    <ThemedText style={{ color: manualForm.workplaceId == null ? theme.onPrimary : theme.text }}>
                       不指定
                     </ThemedText>
                   </ThemedView>
@@ -310,7 +310,7 @@ export function SchedulingSheet() {
                     <Pressable key={wp.id} onPress={() => setManualForm((f) => ({ ...f, workplaceId: wp.id }))}>
                       <ThemedView
                         style={[styles.chip, { backgroundColor: selected ? theme.primary : theme.backgroundElement }]}>
-                        <ThemedText style={{ color: selected ? '#ffffff' : theme.text }}>{wp.name}</ThemedText>
+                        <ThemedText style={{ color: selected ? theme.onPrimary : theme.text }}>{wp.name}</ThemedText>
                       </ThemedView>
                     </Pressable>
                   );
@@ -472,7 +472,7 @@ export function SchedulingSheet() {
 
             <Pressable onPress={onSubmitManual}>
               <ThemedView style={[styles.submitButton, { backgroundColor: theme.primary }]}>
-                <ThemedText style={styles.submitButtonText}>新增這筆班次</ThemedText>
+                <ThemedText style={[styles.submitButtonText, { color: theme.onPrimary }]}>新增這筆班次</ThemedText>
               </ThemedView>
             </Pressable>
 
@@ -496,7 +496,7 @@ export function SchedulingSheet() {
                     <Pressable key={wp.id} onPress={() => setShiftTypeForm((f) => ({ ...f, workplaceId: wp.id }))}>
                       <ThemedView
                         style={[styles.chip, { backgroundColor: selected ? theme.primary : theme.backgroundElement }]}>
-                        <ThemedText style={{ color: selected ? '#ffffff' : theme.text }}>{wp.name}</ThemedText>
+                        <ThemedText style={{ color: selected ? theme.onPrimary : theme.text }}>{wp.name}</ThemedText>
                       </ThemedView>
                     </Pressable>
                   );
@@ -650,7 +650,7 @@ export function SchedulingSheet() {
 
             <Pressable onPress={onSubmitNewShiftType}>
               <ThemedView style={[styles.submitButton, { backgroundColor: theme.primary }]}>
-                <ThemedText style={styles.submitButtonText}>建立班別</ThemedText>
+                <ThemedText style={[styles.submitButtonText, { color: theme.onPrimary }]}>建立班別</ThemedText>
               </ThemedView>
             </Pressable>
 
@@ -803,7 +803,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submitButtonText: {
-    color: '#ffffff',
     fontWeight: '600',
   },
   centerText: {

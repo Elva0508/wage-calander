@@ -258,8 +258,8 @@ export function HoursReportView() {
       </ThemedView>
 
       {isDrifted && activeTemplate && (
-        <ThemedView style={[styles.driftBanner, { backgroundColor: theme.accentSoft }]}>
-          <ThemedText type="small" style={{ color: theme.accent }}>
+        <ThemedView style={[styles.driftBanner, { backgroundColor: theme.warningSoft, borderLeftColor: theme.warning }]}>
+          <ThemedText type="small" style={{ color: theme.warningText }}>
             篩選條件已跟「{activeTemplate.name}」不一樣,不會自動存回範本
           </ThemedText>
           <Pressable
@@ -271,7 +271,7 @@ export function HoursReportView() {
                 showBreakdown,
               })
             }>
-            <ThemedText type="small" style={{ color: theme.accent, fontWeight: '700' }}>
+            <ThemedText type="small" style={{ color: theme.warningText, fontWeight: '700' }}>
               更新範本
             </ThemedText>
           </Pressable>
@@ -456,7 +456,7 @@ function Pill({ label, active, onPress }: { label: string; active: boolean; onPr
   return (
     <Pressable onPress={onPress}>
       <ThemedView style={[styles.pill, { backgroundColor: active ? theme.primary : theme.backgroundElement }]}>
-        <ThemedText type="small" style={{ color: active ? '#ffffff' : theme.text }}>
+        <ThemedText type="small" style={{ color: active ? theme.onPrimary : theme.text }}>
           {label}
         </ThemedText>
       </ThemedView>
@@ -469,7 +469,7 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
   return (
     <Pressable onPress={onPress}>
       <ThemedView style={[styles.chip, { backgroundColor: active ? theme.primary : theme.backgroundElement }]}>
-        <ThemedText type="small" style={{ color: active ? '#ffffff' : theme.text }}>
+        <ThemedText type="small" style={{ color: active ? theme.onPrimary : theme.text }}>
           {label}
         </ThemedText>
       </ThemedView>
@@ -506,6 +506,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderLeftWidth: 3,
   },
   chipRow: {
     flexDirection: 'row',

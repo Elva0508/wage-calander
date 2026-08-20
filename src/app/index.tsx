@@ -105,7 +105,7 @@ export default function TodayScreen() {
 
         <Pressable onPress={() => enterSchedulingMode()} style={styles.fabWrapper}>
           <ThemedView style={[styles.fab, { backgroundColor: theme.primary }]}>
-            <Ionicons name="add" size={28} color="#ffffff" />
+            <Ionicons name="add" size={28} color={theme.onPrimary} />
           </ThemedView>
         </Pressable>
       </SafeAreaView>

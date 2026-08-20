@@ -275,7 +275,7 @@ export function ShiftEditSheet() {
 
                   <Pressable onPress={onSubmitTyped}>
                     <ThemedView style={[styles.submitButton, { backgroundColor: theme.primary }]}>
-                      <ThemedText style={styles.submitButtonText}>儲存變更</ThemedText>
+                      <ThemedText style={[styles.submitButtonText, { color: theme.onPrimary }]}>儲存變更</ThemedText>
                     </ThemedView>
                   </Pressable>
                 </>
@@ -291,7 +291,7 @@ export function ShiftEditSheet() {
                             styles.chip,
                             { backgroundColor: manualForm.workplaceId == null ? theme.primary : theme.backgroundElement },
                           ]}>
-                          <ThemedText style={{ color: manualForm.workplaceId == null ? '#ffffff' : theme.text }}>
+                          <ThemedText style={{ color: manualForm.workplaceId == null ? theme.onPrimary : theme.text }}>
                             不指定
                           </ThemedText>
                         </ThemedView>
@@ -302,7 +302,7 @@ export function ShiftEditSheet() {
                           <Pressable key={wp.id} onPress={() => setManualForm((f) => ({ ...f, workplaceId: wp.id }))}>
                             <ThemedView
                               style={[styles.chip, { backgroundColor: selected ? theme.primary : theme.backgroundElement }]}>
-                              <ThemedText style={{ color: selected ? '#ffffff' : theme.text }}>{wp.name}</ThemedText>
+                              <ThemedText style={{ color: selected ? theme.onPrimary : theme.text }}>{wp.name}</ThemedText>
                             </ThemedView>
                           </Pressable>
                         );
@@ -452,7 +452,7 @@ export function ShiftEditSheet() {
 
                   <Pressable onPress={onSubmitManual}>
                     <ThemedView style={[styles.submitButton, { backgroundColor: theme.primary }]}>
-                      <ThemedText style={styles.submitButtonText}>儲存變更</ThemedText>
+                      <ThemedText style={[styles.submitButtonText, { color: theme.onPrimary }]}>儲存變更</ThemedText>
                     </ThemedView>
                   </Pressable>
                 </>
@@ -604,7 +604,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submitButtonText: {
-    color: '#ffffff',
     fontWeight: '600',
   },
   deleteButton: {

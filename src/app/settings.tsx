@@ -306,7 +306,7 @@ function WorkplaceForm({
                           styles.segmentedButton,
                           { backgroundColor: selected ? theme.primary : theme.backgroundElement },
                         ]}>
-                        <ThemedText style={{ color: selected ? '#ffffff' : theme.text }}>
+                        <ThemedText style={{ color: selected ? theme.onPrimary : theme.text }}>
                           {WAGE_TYPE_LABELS[option]}
                         </ThemedText>
                       </ThemedView>
@@ -528,7 +528,7 @@ function PaySettingsSection({ control }: { control: any }) {
                             styles.segmentedButton,
                             { backgroundColor: selected ? theme.primary : theme.backgroundElement },
                           ]}>
-                          <ThemedText style={{ color: selected ? '#ffffff' : theme.text }}>
+                          <ThemedText style={{ color: selected ? theme.onPrimary : theme.text }}>
                             {PAY_CYCLE_LABELS[option]}
                           </ThemedText>
                         </ThemedView>
@@ -665,7 +665,7 @@ function WeekdayField({
                       styles.weekdayChip,
                       { backgroundColor: selected ? theme.primary : theme.backgroundElement },
                     ]}>
-                    <ThemedText type="small" style={{ color: selected ? '#ffffff' : theme.text }}>
+                    <ThemedText type="small" style={{ color: selected ? theme.onPrimary : theme.text }}>
                       {weekdayLabel}
                     </ThemedText>
                   </ThemedView>
