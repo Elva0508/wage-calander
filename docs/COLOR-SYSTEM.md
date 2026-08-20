@@ -1,6 +1,6 @@
 # 色彩系統
 
-這份文件記錄目前 app 的配色決策,對應 `src/constants/theme.ts` 的 `Colors.light`/`Colors.dark`,以及 `tailwind.config.js` 裡對應的 NativeWind 色票(兩份設定手動保持同步,直到全部畫面遷到 NativeWind 為止)。
+這份文件記錄目前 app 的配色決策,對應 `src/constants/theme.ts` 的 `Colors.light`/`Colors.dark`——這是專案唯一的色票來源(本專案不使用 NativeWind/Tailwind,見下方「用法慣例」)。
 
 ## 設計脈絡
 
@@ -68,6 +68,8 @@
 
 ## 用法慣例
 
+本專案不使用 NativeWind/Tailwind(曾經裝過,實際上沒有任何畫面用 `className` 寫,只是空接了建置管線,已經整套移除),色彩系統只有 `src/constants/theme.ts` 這一份來源:
+
 - `src/hooks/use-theme.ts` 的 `useTheme()` 回傳目前色票(依系統色彩模式自動切換淺/深),元件裡一律透過 `theme.xxx` 讀,不要寫死 hex。
-- 目前大部分畫面還是 `ThemedView`/`ThemedText` + `StyleSheet` 的寫法,NativeWind 只在 `tailwind.config.js` 裡準備好了對應色票(`bg-primary`、`text-accent`、`bg-primary dark:bg-primary-dark` 這種寫法),新畫面如果要用 NativeWind className 可以直接套用,兩套系統的顏色值保證一致。
+- 畫面統一用 `ThemedView`/`ThemedText`(讀 `theme` 的元件包裝)+ `StyleSheet.create` 寫版面,顏色透過 `theme.xxx` 或 `themeColor="xxx"` 帶入,不要新增其他 styling 方案。
 - `StyleSheet.create` 裡的靜態樣式不能放會隨主題變的顏色(例如深色模式要換成 `onPrimary`),這種一定要用內嵌 `style={[styles.xxx, { color: theme.onPrimary }]}` 的寫法,不能寫死在 `StyleSheet.create` 裡。

@@ -1,9 +1,7 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * App 的顏色/字型/間距設定,透過 useTheme() 讀取,搭配 StyleSheet.create 或內嵌 style 使用。
+ * 色彩系統詳細規格見 docs/COLOR-SYSTEM.md。
  */
-
-import '@/global.css';
 
 import { Platform } from 'react-native';
 
@@ -65,10 +63,10 @@ export const Fonts = Platform.select({
     mono: 'monospace',
   },
   web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
+    sans: 'Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
+    serif: 'Georgia, "Times New Roman", serif',
+    rounded: '"SF Pro Rounded", "Hiragino Maru Gothic ProN", Meiryo, "MS PGothic", sans-serif',
+    mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   },
 });
 
