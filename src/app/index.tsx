@@ -101,6 +101,10 @@ export default function TodayScreen() {
             theme={calendarTheme}
             style={styles.calendar}
           />
+
+          <ThemedText type="small" themeColor="textSecondary" style={styles.caption}>
+            點任一天查看班別,或按右下角「+」開始排班
+          </ThemedText>
         </ScrollView>
 
         <Pressable onPress={() => enterSchedulingMode()} style={styles.fabWrapper}>
@@ -134,6 +138,9 @@ const styles = StyleSheet.create({
   },
   calendar: {
     borderRadius: CardRadius,
+  },
+  caption: {
+    textAlign: 'center',
   },
   fabWrapper: {
     position: 'absolute',

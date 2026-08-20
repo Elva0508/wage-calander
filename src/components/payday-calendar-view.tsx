@@ -154,53 +154,63 @@ export function PaydayCalendarView() {
         </ThemedView>
       )}
 
-      {rows.length === 0 ? (
-        <ThemedText themeColor="textSecondary">這個月還沒有任何發薪紀錄。</ThemedText>
-      ) : (
-        rows.map((row) => (
-          <Pressable
-            key={row.key}
-            onPress={() =>
-              setOpenDetail({
-                workplaceId: row.workplaceId,
-                rangeStart: row.detailRangeStart,
-                rangeEnd: row.detailRangeEnd,
-              })
-            }>
-            <ThemedView type="backgroundElement" style={styles.card}>
-              <ThemedView type="backgroundElement" style={styles.cardHeader}>
-                <ThemedText type="smallBold">{row.workplaceName}</ThemedText>
-                <ThemedText style={{ color: row.completed ? theme.primary : theme.accent }}>
-                  ${row.amount.toLocaleString()}
-                </ThemedText>
-              </ThemedView>
-              <ThemedText type="small" themeColor="textSecondary">
-                {row.paydayLabel}
-                {row.periodLabel ? ` · ${row.periodLabel}` : ''}
-              </ThemedText>
-              {!row.completed && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  預估,尚未確定入帳
-                </ThemedText>
-              )}
-            </ThemedView>
-          </Pressable>
-        ))
-      )}
-
-      <ThemedView style={[styles.totalCard, { backgroundColor: theme.primarySoft }]}>
-        <ThemedText type="small" themeColor="textSecondary">
+      <ThemedView style={[styles.heroCard, { backgroundColor: theme.primary }]}>
+        <ThemedText type="small" style={{ color: theme.onPrimary, opacity: 0.85 }}>
           這個月總共領到
         </ThemedText>
-        <ThemedText type="title" style={[styles.totalNumber, { color: theme.primary }]}>
+        <ThemedText type="title" style={[styles.heroNumber, { color: theme.onPrimary }]}>
           ${totals.confirmed.toLocaleString()}
         </ThemedText>
         {totals.pending > 0 && (
-          <ThemedText type="small" themeColor="textSecondary">
+          <ThemedText type="small" style={{ color: theme.onPrimary, opacity: 0.85 }}>
             另有預估 ${totals.pending.toLocaleString()} 尚未入帳
           </ThemedText>
         )}
       </ThemedView>
+
+      {rows.length === 0 ? (
+        <ThemedText themeColor="textSecondary">這個月還沒有任何發薪紀錄。</ThemedText>
+      ) : (
+        <>
+          <ThemedText type="small" themeColor="textSecondary">
+            發薪時間軸
+          </ThemedText>
+          <ThemedView style={styles.timeline}>
+            {rows.map((row) => (
+              <Pressable
+                key={row.key}
+                onPress={() =>
+                  setOpenDetail({
+                    workplaceId: row.workplaceId,
+                    rangeStart: row.detailRangeStart,
+                    rangeEnd: row.detailRangeEnd,
+                  })
+                }>
+                <ThemedView type="backgroundElement" style={styles.card}>
+                  <ThemedView
+                    style={[styles.timelineDot, { backgroundColor: row.completed ? theme.primary : theme.border }]}
+                  />
+                  <ThemedView type="backgroundElement" style={styles.cardHeader}>
+                    <ThemedText type="smallBold">{row.workplaceName}</ThemedText>
+                    <ThemedText style={{ color: row.completed ? theme.primary : theme.accent }}>
+                      ${row.amount.toLocaleString()}
+                    </ThemedText>
+                  </ThemedView>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {row.paydayLabel}
+                    {row.periodLabel ? ` · ${row.periodLabel}` : ''}
+                  </ThemedText>
+                  {!row.completed && (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      預估,尚未確定入帳
+                    </ThemedText>
+                  )}
+                </ThemedView>
+              </Pressable>
+            ))}
+          </ThemedView>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -225,22 +235,35 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderLeftWidth: 3,
   },
+  timeline: {
+    gap: Spacing.two,
+    paddingLeft: Spacing.three,
+  },
   card: {
+    position: 'relative',
     borderRadius: CardRadius,
     padding: Spacing.four,
     gap: Spacing.one,
+  },
+  timelineDot: {
+    position: 'absolute',
+    left: -Spacing.three - 4,
+    top: Spacing.four + 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  totalCard: {
+  heroCard: {
     borderRadius: CardRadius,
     padding: Spacing.four,
     gap: 2,
   },
-  totalNumber: {
+  heroNumber: {
     fontSize: 32,
     lineHeight: 38,
   },
