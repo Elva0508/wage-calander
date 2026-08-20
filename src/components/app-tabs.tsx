@@ -49,6 +49,15 @@ export default function AppTabs() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="test"
+        options={{
+          title: '測試頁',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="flask-outline" size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
